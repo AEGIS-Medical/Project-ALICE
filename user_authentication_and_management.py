@@ -393,4 +393,71 @@ class AuthenticationManager:
                  confidence_level, video_file_path)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (result_id, session_id, subject_id, analyzer_id, overall_score,
-                  eye_movement
+                  eye_movement_score, contradiction_score, tonal_variation_score,
+                  confidence_level, video_file_path))
+            conn.commit()
+            
+            self.logger.info(f"Analysis result saved: {result_id}")
+            return result_id
+
+    def get_user_analysis_history(self, user_id: str, limit: int = 50) -> List[Dict]:
+        """Get analysis history for a user"""
+        with self.get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT ar.*, rs.session_type, u.username as subject_username
+                FROM analysis_results ar
+                JOIN recording_sessions rs ON ar.session_id = rs.id
+                JOIN users u ON ar.subject_id = u.id
+                WHERE ar.analyzer_id = ? OR ar.subject_id = ?
+                ORDER BY ar.analysis_timestamp DESC
+                LIMIT ?
+            """, (user_id, user_id, limit))
+            
+            results = cursor.fetchall()
+            return [dict(row) for row in results]
+
+# FastAPI integration
+app = FastAPI(title="Deception Detection API")
+auth_manager = AuthenticationManager(secret_key="your-secret-key-here")
+
+@app.post("/auth/register")
+async def register(user_data: UserRegistration):
+    return auth_manager.register_user(user_data)
+
+@app.post("/auth/login")
+async def login(login_data: UserLogin):
+    return auth_manager.login_user(login_data)
+
+@app.get("/auth/me")
+async def get_current_user_info(current_user: User = Depends(auth_manager.get_current_user)):
+    return current_user
+
+@app.post("/sessions/create")
+async def create_session(participant_username: str, 
+                        current_user: User = Depends(auth_manager.get_current_user)):
+    session_id = auth_manager.create_recording_session(
+        current_user.id, participant_username
+    )
+    return {"session_id": session_id}
+
+@app.post("/sessions/{session_id}/consent")
+async def give_consent(session_id: str, consent_given: bool,
+                      current_user: User = Depends(auth_manager.get_current_user)):
+    auth_manager.record_consent(session_id, current_user.id, consent_given)
+    return {"message": "Consent recorded"}
+
+@app.get("/sessions/{session_id}/status")
+async def get_session_status(session_id: str,
+                           current_user: User = Depends(auth_manager.get_current_user)):
+    return auth_manager.check_session_consent(session_id)
+
+@app.post("/sessions/{session_id}/start")
+async def start_session(session_id: str,
+                       current_user: User = Depends(auth_manager.get_current_user)):
+    auth_manager.start_recording_session(session_id)
+    return {"message": "Recording session started"}
+
+@app.get("/analysis/history")
+async def get_analysis_history(current_user: User = Depends(auth_manager.get_current_user)):
+    return auth_manager.get_user_analysis_history(current_user.id)
