@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veritas AI — System Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e293b;
+    --accent: #3b82f6;
+    --accent2: #10b981;
+    --accent3: #f59e0b;
+    --accent4: #ef4444;
+    --accent5: #8b5cf6;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-bright: #f8fafc;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+
+  .header {
+    padding: 32px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(59,130,246,0.06) 0%, transparent 100%);
+  }
+
+  .header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.5px;
+  }
+
+  .header h1 span { color: var(--accent); }
+
+  .header p {
+    color: var(--text-dim);
+    margin-top: 6px;
+    font-size: 14px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 16px 40px 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab {
+    padding: 10px 20px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(59,130,246,0.05);
+  }
+
+  .content { padding: 32px 40px; }
+
+  /* ===== ARCHITECTURE VIEW ===== */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  .arch-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .arch-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--card-accent, var(--accent));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .arch-card:hover {
+    border-color: var(--card-accent, var(--accent));
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+
+  .arch-card:hover::before { opacity: 1; }
+
+  .arch-card .icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    margin-bottom: 14px;
+    background: rgba(59,130,246,0.1);
+  }
+
+  .arch-card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 6px;
+  }
+
+  .arch-card .tech {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--card-accent, var(--accent));
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+
+  .arch-card p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ===== DATA FLOW VIEW ===== */
+  .flow-container { max-width: 100%; }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .flow-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    min-width: 160px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s;
+  }
+
+  .flow-node:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(59,130,246,0.15);
+  }
+
+  .flow-node .label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-bright);
+  }
+
+  .flow-node .sub {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .flow-arrow {
+    color: var(--accent);
+    font-size: 20px;
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .flow-parallel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .flow-parallel .flow-node { min-width: 200px; }
+
+  .flow-section {
+    margin-bottom: 36px;
+  }
+
+  .flow-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .flow-section-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ===== COST VIEW ===== */
+  .cost-chart {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .cost-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .cost-card .tier-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+  }
+
+  .cost-card .price {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+  }
+
+  .cost-card .price span {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 400;
+  }
+
+  .cost-card .details {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+
+  .bar-chart {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .bar-chart h4 {
+    font-size: 14px;
+    margin-bottom: 20px;
+    color: var(--text-bright);
+  }
+
+  .bar-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 12px;
+  }
+
+  .bar-label {
+    width: 100px;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--surface2);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    padding-left: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: white;
+    transition: width 1s ease;
+  }
+
+  /* ===== STACK VIEW ===== */
+  .stack-layer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+
+  .stack-header {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .stack-header:hover { background: var(--surface2); }
+
+  .stack-header h4 {
+    font-size: 14px;
+    color: var(--text-bright);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .stack-header .badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stack-body {
+    padding: 0 20px 16px;
+    display: none;
+  }
+
+  .stack-body.open { display: block; }
+
+  .stack-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .stack-item .name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 180px;
+  }
+
+  .stack-item .desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .chevron {
+    transition: transform 0.2s;
+    color: var(--text-dim);
+  }
+
+  .chevron.open { transform: rotate(180deg); }
+
+  /* ===== HIDDEN ===== */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  @media (max-width: 900px) {
+    .arch-grid { grid-template-columns: 1fr; }
+    .cost-chart { grid-template-columns: 1fr 1fr; }
+    .flow-row { flex-wrap: wrap; }
+    .content { padding: 20px; }
+    .tabs { padding: 12px 20px 0; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>Veritas</span> AI — System Architecture</h1>
+  <p>Deception Detection Platform • Android-First • Real-Time & Batch Analysis</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showView('arch')">Architecture</button>
+  <button class="tab" onclick="showView('flow')">Data Flow</button>
+  <button class="tab" onclick="showView('stack')">Full Stack</button>
+  <button class="tab" onclick="showView('cost')">Cost Model</button>
+</div>
+
+<div class="content">
+
+  <!-- ===== ARCHITECTURE VIEW ===== -->
+  <div id="arch" class="view active">
+    <div class="section-label">Client Layer</div>
+    <div class="arch-grid">
+      <div class="arch-card" style="--card-accent: #3b82f6">
+        <div class="icon" style="background: rgba(59,130,246,0.1)">📱</div>
+        <h3>Mobile App</h3>
+        <div class="tech">Kotlin Multiplatform + Compose</div>
+        <p>Shared business logic for Android & iOS. Native UI. CameraX for capture, MediaCodec for H.265 encoding.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #10b981">
+        <div class="icon" style="background: rgba(16,185,129,0.1)">🎥</div>
+        <h3>WebRTC Video</h3>
+        <div class="tech">LiveKit SDK</div>
+        <p>Peer-to-peer encrypted video. Managed SFU for multi-party. Server-side recording hooks. Adaptive bitrate.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #f59e0b">
+        <div class="icon" style="background: rgba(245,158,11,0.1)">👁️</div>
+        <h3>On-Device ML</h3>
+        <div class="tech">MediaPipe + ONNX Runtime</div>
+        <p>468-point face mesh at 30fps. Landmark extraction on-device. Streams lightweight protobuf, not raw video.</p>
+      </div>
+    </div>
+
+    <div class="section-label">Backend Services</div>
+    <div class="arch-grid">
+      <div class="arch-card" style="--card-accent: #8b5cf6">
+        <div class="icon" style="background: rgba(139,92,246,0.1)">⚡</div>
+        <h3>API Gateway</h3>
+        <div class="tech">FastAPI (Python 3.12+)</div>
+        <p>Async REST + WebSocket. Pydantic validation. OpenAPI docs. Orchestrates all analysis pipelines.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #ef4444">
+        <div class="icon" style="background: rgba(239,68,68,0.1)">🔐</div>
+        <h3>Auth Service</h3>
+        <div class="tech">Keycloak / Auth0</div>
+        <p>Username/password with Argon2id. SSO via SAML/OIDC. MFA with TOTP + WebAuthn. JWT session management.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #10b981">
+        <div class="icon" style="background: rgba(16,185,129,0.1)">🧠</div>
+        <h3>ML Inference</h3>
+        <div class="tech">Triton Inference Server</div>
+        <p>Serves PyTorch, ONNX, TF models. Dynamic batching. GPU scheduling. Three parallel analysis pipelines.</p>
+      </div>
+    </div>
+
+    <div class="section-label">Analysis Engines</div>
+    <div class="arch-grid">
+      <div class="arch-card" style="--card-accent: #3b82f6">
+        <div class="icon" style="background: rgba(59,130,246,0.1)">👀</div>
+        <h3>Gaze Deviation</h3>
+        <div class="tech">MediaPipe + Custom LSTM</div>
+        <p>Tracks eye position vs. center frame. Classifies deviation patterns against per-contact baseline. Blink rate anomalies.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #f59e0b">
+        <div class="icon" style="background: rgba(245,158,11,0.1)">🔊</div>
+        <h3>Vocal Tonality</h3>
+        <div class="tech">Wav2Vec 2.0 + Praat</div>
+        <p>Pitch (F0), jitter, shimmer, HNR extraction. Deep speech representation. Stress indicator detection vs. baseline.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #ef4444">
+        <div class="icon" style="background: rgba(239,68,68,0.1)">📝</div>
+        <h3>Contradiction NLP</h3>
+        <div class="tech">DeBERTa-v3 + pgvector</div>
+        <p>Natural Language Inference on statements. Compares against per-contact history stored as embeddings. Semantic consistency scoring.</p>
+      </div>
+    </div>
+
+    <div class="section-label">Data Layer</div>
+    <div class="arch-grid">
+      <div class="arch-card" style="--card-accent: #8b5cf6">
+        <div class="icon" style="background: rgba(139,92,246,0.1)">🗄️</div>
+        <h3>PostgreSQL + pgvector</h3>
+        <div class="tech">Primary DB + Vector Store</div>
+        <p>Relational data + statement embeddings. TimescaleDB for time-series scores. Full audit trail.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #10b981">
+        <div class="icon" style="background: rgba(16,185,129,0.1)">📦</div>
+        <h3>MinIO (S3-Compatible)</h3>
+        <div class="tech">Object Storage + Tiering</div>
+        <p>Video, audio, model artifacts. Hot/warm/cold lifecycle. AES-256 encryption. Per-user key management.</p>
+      </div>
+      <div class="arch-card" style="--card-accent: #f59e0b">
+        <div class="icon" style="background: rgba(245,158,11,0.1)">📨</div>
+        <h3>Kafka + Redis</h3>
+        <div class="tech">Event Stream + Cache</div>
+        <p>Kafka for real-time analysis pipeline. Redis for task queue (Celery) and short-term cache. Event replay for retraining.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DATA FLOW VIEW ===== -->
+  <div id="flow" class="view">
+    <div class="flow-section">
+      <div class="flow-section-title"><div class="dot"></div> Real-Time Mode (Live Video Call)</div>
+      <div class="flow-row">
+        <div class="flow-node" style="border-color: var(--accent)">
+          <div class="label">📱 Mobile Client</div>
+          <div class="sub">CameraX + MediaPipe</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-parallel">
+          <div class="flow-node">
+            <div class="label">🎥 WebRTC Stream</div>
+            <div class="sub">LiveKit SFU</div>
+          </div>
+          <div class="flow-node">
+            <div class="label">📍 Landmark JSON</div>
+            <div class="sub">protobuf ~50KB/min</div>
+          </div>
+          <div class="flow-node">
+            <div class="label">🎤 Audio Stream</div>
+            <div class="sub">Opus 32kbps</div>
+          </div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">📨 Kafka</div>
+          <div class="sub">Event ingestion</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-parallel">
+          <div class="flow-node" style="border-left: 3px solid var(--accent)">
+            <div class="label">👀 Gaze Analysis</div>
+            <div class="sub">LSTM on landmarks</div>
+          </div>
+          <div class="flow-node" style="border-left: 3px solid var(--accent3)">
+            <div class="label">🔊 Tonality Analysis</div>
+            <div class="sub">Wav2Vec + Praat</div>
+          </div>
+          <div class="flow-node" style="border-left: 3px solid var(--accent4)">
+            <div class="label">📝 NLP Contradiction</div>
+            <div class="sub">DeBERTa + pgvector</div>
+          </div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" style="border-color: var(--accent2)">
+          <div class="label">🎯 Composite Score</div>
+          <div class="sub">XGBoost ensemble</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" style="border-color: var(--accent3)">
+          <div class="label">📱 WebSocket</div>
+          <div class="sub">~2-3s latency</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-section">
+      <div class="flow-section-title"><div class="dot" style="background: var(--accent3)"></div> Batch Mode (Uploaded Video)</div>
+      <div class="flow-row">
+        <div class="flow-node" style="border-color: var(--accent3)">
+          <div class="label">📤 Video Upload</div>
+          <div class="sub">H.265 compressed</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">📦 MinIO Storage</div>
+          <div class="sub">S3-compatible</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">⚙️ Celery Worker</div>
+          <div class="sub">FFmpeg extract</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-parallel">
+          <div class="flow-node">
+            <div class="label">🎤 Whisper Transcription</div>
+            <div class="sub">Word-level timestamps</div>
+          </div>
+          <div class="flow-node">
+            <div class="label">👁️ MediaPipe Server</div>
+            <div class="sub">Landmark extraction</div>
+          </div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">🧠 Triton Inference</div>
+          <div class="sub">All 3 pipelines</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" style="border-color: var(--accent2)">
+          <div class="label">📊 Analysis Report</div>
+          <div class="sub">Timestamped scores</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-section">
+      <div class="flow-section-title"><div class="dot" style="background: var(--accent5)"></div> Consent Flow (Both Users Required)</div>
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="label">👤 Initiator</div>
+          <div class="sub">Sends call invite</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">👤 Recipient</div>
+          <div class="sub">Must have app installed</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" style="border-color: var(--accent4)">
+          <div class="label">⚠️ Consent Modal</div>
+          <div class="sub">Both must tap "I Consent"</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node">
+          <div class="label">🔑 Signed JWTs</div>
+          <div class="sub">Consent tokens stored</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node" style="border-color: var(--accent2)">
+          <div class="label">✅ Recording Enabled</div>
+          <div class="sub">Analysis begins</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== FULL STACK VIEW ===== -->
+  <div id="stack" class="view">
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>📱 Mobile Client <span class="badge" style="background: rgba(59,130,246,0.15); color: var(--accent)">ANDROID-FIRST</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body open">
+        <div class="stack-item"><span class="name">Kotlin Multiplatform</span><span class="desc">Shared business logic (networking, models, analysis orchestration). Single codebase compiles to Android JVM and iOS native.</span></div>
+        <div class="stack-item"><span class="name">Compose Multiplatform</span><span class="desc">Declarative UI framework. Native rendering on Android (Jetpack Compose) and iOS (via Compose for iOS).</span></div>
+        <div class="stack-item"><span class="name">LiveKit SDK</span><span class="desc">WebRTC video calling with managed SFU. E2E encryption, adaptive bitrate, NAT traversal, server-side recording.</span></div>
+        <div class="stack-item"><span class="name">MediaPipe Face Mesh</span><span class="desc">468-point facial landmark extraction at 30fps on-device. No raw video sent to server for gaze analysis.</span></div>
+        <div class="stack-item"><span class="name">ONNX Runtime Mobile</span><span class="desc">Runs custom gaze deviation LSTM on-device. Optimized for mobile inference.</span></div>
+        <div class="stack-item"><span class="name">CameraX + MediaCodec</span><span class="desc">Camera preview/capture + hardware H.265/HEVC encoding. 40-50% smaller than H.264.</span></div>
+        <div class="stack-item"><span class="name">SQLDelight</span><span class="desc">Type-safe Kotlin SQL. Cross-platform local database for offline caching and contact data.</span></div>
+        <div class="stack-item"><span class="name">Ktor Client</span><span class="desc">Kotlin-native HTTP + WebSocket client. Handles REST API calls and real-time score streaming.</span></div>
+      </div>
+    </div>
+
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>⚡ Backend API <span class="badge" style="background: rgba(139,92,246,0.15); color: var(--accent5)">PYTHON</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body">
+        <div class="stack-item"><span class="name">FastAPI</span><span class="desc">Async API gateway. REST + WebSocket endpoints. Pydantic validation. Auto-generated OpenAPI documentation.</span></div>
+        <div class="stack-item"><span class="name">Keycloak</span><span class="desc">Identity provider. Username/password (Argon2id), SSO (SAML/OIDC), MFA (TOTP + WebAuthn). JWT issuance.</span></div>
+        <div class="stack-item"><span class="name">Celery + Redis</span><span class="desc">Async task queue for video processing, batch analysis, and model retraining. Redis as broker and cache.</span></div>
+        <div class="stack-item"><span class="name">Apache Kafka</span><span class="desc">Event streaming. Decouples video frame ingestion from ML inference. Enables replay for retraining.</span></div>
+      </div>
+    </div>
+
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>🧠 ML / Analysis <span class="badge" style="background: rgba(16,185,129,0.15); color: var(--accent2)">GPU</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body">
+        <div class="stack-item"><span class="name">Triton Inference Server</span><span class="desc">Multi-framework model serving. Dynamic batching, GPU scheduling. Hosts gaze, tonality, and NLP models.</span></div>
+        <div class="stack-item"><span class="name">Whisper (faster-whisper)</span><span class="desc">CTranslate2-optimized transcription. 4x faster than base. Word-level timestamps. Multi-language.</span></div>
+        <div class="stack-item"><span class="name">Wav2Vec 2.0 + Praat</span><span class="desc">Deep speech features + acoustic features (F0, jitter, shimmer, HNR). Combined for tonality flux detection.</span></div>
+        <div class="stack-item"><span class="name">DeBERTa-v3 (NLI)</span><span class="desc">Fine-tuned Natural Language Inference model. Compares current statements against per-contact history.</span></div>
+        <div class="stack-item"><span class="name">XGBoost Ensemble</span><span class="desc">Combines all three analysis vectors. Platt-calibrated per-contact. Produces 0-100 deception probability.</span></div>
+        <div class="stack-item"><span class="name">LoRA Adapters</span><span class="desc">Per-contact model personalization. ~2-5MB weights per contact. Retrained every 3 calls. $0.10-0.30/retrain.</span></div>
+      </div>
+    </div>
+
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>🗄️ Data Layer <span class="badge" style="background: rgba(245,158,11,0.15); color: var(--accent3)">TIERED</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body">
+        <div class="stack-item"><span class="name">PostgreSQL 16 + pgvector</span><span class="desc">Primary relational store. pgvector for statement embeddings. TimescaleDB for time-series score data.</span></div>
+        <div class="stack-item"><span class="name">MinIO</span><span class="desc">S3-compatible object storage. Stores compressed video, audio, model artifacts. Lifecycle policies for tiering.</span></div>
+        <div class="stack-item"><span class="name">HashiCorp Vault</span><span class="desc">Encryption key management. Per-user AES-256-GCM keys. Secrets for all services.</span></div>
+      </div>
+    </div>
+
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>🏗️ Infrastructure <span class="badge" style="background: rgba(239,68,68,0.15); color: var(--accent4)">K8S</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body">
+        <div class="stack-item"><span class="name">Kubernetes (EKS/GKE)</span><span class="desc">GPU node pools for inference, CPU pools for API. HPA autoscaling. Spot instances for retraining.</span></div>
+        <div class="stack-item"><span class="name">Terraform</span><span class="desc">Infrastructure as Code for cloud resources. Reproducible, auditable deployments.</span></div>
+        <div class="stack-item"><span class="name">Docker</span><span class="desc">Containerized services with multi-stage builds. Minimal images for production.</span></div>
+        <div class="stack-item"><span class="name">SVT-AV1</span><span class="desc">Server-side video re-encoding. AV1 is 20-30% smaller than HEVC at same quality. Async via Celery.</span></div>
+      </div>
+    </div>
+
+    <div class="stack-layer">
+      <div class="stack-header" onclick="toggleStack(this)">
+        <h4>🗜️ Compression Pipeline <span class="badge" style="background: rgba(16,185,129,0.15); color: var(--accent2)">COST OPT</span></h4>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="stack-body">
+        <div class="stack-item"><span class="name">H.265/HEVC (on-device)</span><span class="desc">Hardware MediaCodec encoding. 720p@24fps, CRF 28. 40-50% smaller than H.264. Sufficient for facial landmarks.</span></div>
+        <div class="stack-item"><span class="name">Opus (audio)</span><span class="desc">32kbps mono. 95% compression vs raw PCM. Optimized for speech. Extracted server-side via FFmpeg.</span></div>
+        <div class="stack-item"><span class="name">Protobuf (landmarks)</span><span class="desc">468 facial points per frame as protobuf. ~50MB per 30-min call vs ~2GB raw video. 97% reduction.</span></div>
+        <div class="stack-item"><span class="name">AV1 (server re-encode)</span><span class="desc">SVT-AV1 slow preset. 20-30% smaller than HEVC. Done async. Used for long-term video storage.</span></div>
+        <div class="stack-item"><span class="name">AVIF (thumbnails)</span><span class="desc">Preview frames in AVIF format. 50% smaller than WebP for equivalent quality.</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== COST VIEW ===== -->
+  <div id="cost" class="view">
+    <div class="section-label">Storage Tiers — Per User / Month</div>
+    <div class="cost-chart">
+      <div class="cost-card" style="border-top: 3px solid var(--accent4)">
+        <div class="tier-label" style="color: var(--accent4)">🔥 Hot (SSD)</div>
+        <div class="price">$1.15<span>/mo</span></div>
+        <div class="details">0–30 days. Full video (AV1) + audio (Opus) + transcripts + scores + landmarks. Instant playback.</div>
+      </div>
+      <div class="cost-card" style="border-top: 3px solid var(--accent3)">
+        <div class="tier-label" style="color: var(--accent3)">♨️ Warm (HDD)</div>
+        <div class="price">$0.22<span>/mo</span></div>
+        <div class="details">30–90 days. Audio + transcripts + scores + landmarks only. Video deleted. 90% cost reduction.</div>
+      </div>
+      <div class="cost-card" style="border-top: 3px solid var(--accent)">
+        <div class="tier-label" style="color: var(--accent)">❄️ Cold (Archive)</div>
+        <div class="price">$0.04<span>/mo</span></div>
+        <div class="details">90–365 days. Transcripts + analysis scores + statement embeddings only. Minimal footprint.</div>
+      </div>
+      <div class="cost-card" style="border-top: 3px solid var(--accent2)">
+        <div class="tier-label" style="color: var(--accent2)">🗑️ Purged</div>
+        <div class="price">$0.00<span>/mo</span></div>
+        <div class="details">365+ days. All PII purged. Only anonymized aggregate training data retained (with consent).</div>
+      </div>
+    </div>
+
+    <div class="section-label">Infrastructure Cost at Scale (Monthly)</div>
+    <div class="bar-chart">
+      <h4>Storage Cost by User Count</h4>
+      <div class="bar-row">
+        <span class="bar-label">1K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 5%; background: linear-gradient(90deg, var(--accent), var(--accent2))">$1.2K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">10K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 25%; background: linear-gradient(90deg, var(--accent), var(--accent3))">$9K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">100K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 60%; background: linear-gradient(90deg, var(--accent3), var(--accent4))">$60K</div>
+        </div>
+      </div>
+
+      <h4 style="margin-top: 28px">Compute Cost (Inference + Retraining)</h4>
+      <div class="bar-row">
+        <span class="bar-label">1K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 8%; background: linear-gradient(90deg, var(--accent5), var(--accent))">$2.8K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">10K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 32%; background: linear-gradient(90deg, var(--accent5), var(--accent3))">$16K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">100K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 80%; background: linear-gradient(90deg, var(--accent4), var(--accent3))">$80K</div>
+        </div>
+      </div>
+
+      <h4 style="margin-top: 28px">Total Monthly Infrastructure</h4>
+      <div class="bar-row">
+        <span class="bar-label">1K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 10%; background: linear-gradient(90deg, #10b981, #3b82f6)">$5.5K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">10K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 40%; background: linear-gradient(90deg, #3b82f6, #8b5cf6)">$35K</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label">100K users</span>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444)">$215K</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; padding: 16px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; border-left: 3px solid var(--accent2);">
+      <p style="font-size: 13px; color: var(--text-dim); line-height: 1.6;">
+        <strong style="color: var(--accent2)">Key insight:</strong> By streaming facial landmarks (protobuf) instead of raw video, bandwidth drops by 97%. By deleting video after 30 days and keeping only landmarks + transcripts, storage costs drop ~90%. The LoRA adapter approach for per-contact personalization costs only $0.10-0.30 per retraining job vs. $5-20 for full model fine-tuning.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleStack(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+</script>
+
+</body>
+</html>
