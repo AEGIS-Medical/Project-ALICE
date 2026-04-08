@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veritas AI — System Flow Diagrams</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Instrument+Serif&family=Nunito+Sans:wght@400;600;700;800&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#05080f;--surface:#0c1220;--surface2:#111b2e;--surface3:#162038;
+  --border:#1a2744;--border-hi:#2a3d66;
+  --blue:#4a90ff;--cyan:#00d4aa;--amber:#ffb347;--red:#ff6b6b;--violet:#a78bfa;--rose:#f472b6;
+  --blue-dim:rgba(74,144,255,0.12);--cyan-dim:rgba(0,212,170,0.1);
+  --amber-dim:rgba(255,179,71,0.1);--red-dim:rgba(255,107,107,0.1);
+  --violet-dim:rgba(167,139,250,0.1);--rose-dim:rgba(244,114,182,0.1);
+  --text:#c8d6e5;--text-dim:#5a6f8a;--text-bright:#edf2f7;--white:#fff;
+}
+body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* === HEADER === */
+.masthead{padding:28px 36px 20px;border-bottom:1px solid var(--border);
+  background:linear-gradient(170deg,rgba(74,144,255,0.04) 0%,transparent 40%,rgba(0,212,170,0.03) 100%)}
+.masthead h1{font-family:'Instrument Serif',serif;font-size:30px;font-weight:400;color:var(--white);letter-spacing:-0.3px}
+.masthead h1 em{font-style:normal;color:var(--cyan)}
+.masthead p{font-size:13px;color:var(--text-dim);margin-top:4px}
+
+/* === TABS === */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:100}
+.tab-btn{flex:1;padding:14px 10px;font-family:'Nunito Sans',sans-serif;font-size:13px;font-weight:700;
+  color:var(--text-dim);background:none;border:none;cursor:pointer;
+  border-bottom:2.5px solid transparent;transition:all .25s;text-transform:uppercase;letter-spacing:1.5px}
+.tab-btn:hover{color:var(--text);background:rgba(255,255,255,0.02)}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan);background:rgba(0,212,170,0.04)}
+.tab-btn .emoji{font-size:16px;margin-right:6px}
+
+/* === PANELS === */
+.panel{display:none;padding:32px 36px 60px}
+.panel.active{display:block}
+
+/* === FLOW PRIMITIVES === */
+.flow-title{font-family:'Instrument Serif',serif;font-size:22px;color:var(--white);margin-bottom:6px}
+.flow-subtitle{font-size:12px;color:var(--text-dim);margin-bottom:28px;line-height:1.6;max-width:700px}
+
+.swim-lanes{position:relative}
+.lane{margin-bottom:32px;position:relative}
+.lane-label{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;
+  letter-spacing:2px;color:var(--text-dim);margin-bottom:14px;padding-left:4px;
+  display:flex;align-items:center;gap:8px}
+.lane-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.lane-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+/* === NODES === */
+.node-row{display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}
+.node-row::-webkit-scrollbar{height:4px}
+.node-row::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:4px}
+
+.node{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+  min-width:150px;max-width:200px;flex-shrink:0;position:relative;transition:all .3s}
+.node:hover{border-color:var(--node-color,var(--blue));transform:translateY(-2px);
+  box-shadow:0 6px 24px rgba(0,0,0,0.4),0 0 0 1px var(--node-color,var(--blue))}
+.node::before{content:'';position:absolute;top:0;left:16px;right:16px;height:2px;
+  background:var(--node-color,var(--blue));border-radius:0 0 2px 2px;opacity:0;transition:opacity .3s}
+.node:hover::before{opacity:1}
+
+.node .n-icon{font-size:20px;margin-bottom:8px}
+.node .n-title{font-size:12px;font-weight:800;color:var(--text-bright);margin-bottom:4px;line-height:1.3}
+.node .n-tech{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--node-color,var(--blue));
+  margin-bottom:6px;opacity:.8}
+.node .n-desc{font-size:11px;color:var(--text-dim);line-height:1.5}
+.node .n-badge{position:absolute;top:8px;right:8px;font-size:8px;font-weight:700;
+  padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px}
+
+/* === ARROWS === */
+.arrow{display:flex;align-items:center;justify-content:center;min-width:36px;flex-shrink:0;position:relative}
+.arrow svg{width:28px;height:28px}
+.arrow-line{stroke:var(--arrow-color,var(--blue));stroke-width:1.5;fill:none;opacity:.5}
+.arrow-head{fill:var(--arrow-color,var(--blue));opacity:.7}
+.arrow .a-label{position:absolute;top:-14px;font-family:'IBM Plex Mono',monospace;
+  font-size:8px;color:var(--text-dim);white-space:nowrap;letter-spacing:.5px}
+
+/* animated arrows */
+.arrow svg .arrow-line{stroke-dasharray:6 4;animation:dash 1.5s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-20}}
+
+/* === PARALLEL SPLIT === */
+.parallel-group{display:flex;flex-direction:column;gap:8px;min-width:180px;flex-shrink:0}
+.parallel-group .node{min-width:unset;max-width:unset;width:100%}
+.parallel-label{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-dim);
+  text-align:center;padding:2px 8px;background:var(--surface2);border-radius:4px;letter-spacing:1px}
+
+/* === CONNECTOR VERTICAL === */
+.v-connector{width:1px;height:24px;background:var(--border);margin:0 auto}
+
+/* === PLATFORM GRID === */
+.platform-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:28px}
+.platform-chip{background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:12px;text-align:center;transition:all .25s;cursor:default}
+.platform-chip:hover{border-color:var(--cyan);background:var(--surface2)}
+.platform-chip .p-icon{font-size:24px;margin-bottom:6px}
+.platform-chip .p-name{font-size:11px;font-weight:700;color:var(--text-bright)}
+.platform-chip .p-method{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--cyan);margin-top:3px}
+
+/* === UX SCREENS === */
+.ux-timeline{position:relative;padding-left:48px}
+.ux-timeline::before{content:'';position:absolute;left:19px;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,var(--cyan),var(--blue),var(--violet),var(--amber),var(--cyan))}
+
+.ux-step{position:relative;margin-bottom:36px}
+.ux-step .step-dot{position:absolute;left:-48px;top:4px;width:38px;height:38px;border-radius:50%;
+  background:var(--surface2);border:2px solid var(--step-color,var(--cyan));
+  display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2}
+.ux-step .step-number{position:absolute;left:-48px;top:46px;width:38px;text-align:center;
+  font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--step-color,var(--cyan))}
+
+.ux-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:20px 22px;margin-left:12px;transition:all .3s;border-left:3px solid var(--step-color,var(--cyan))}
+.ux-card:hover{border-color:var(--step-color,var(--cyan));box-shadow:0 8px 32px rgba(0,0,0,0.3)}
+.ux-card h4{font-size:14px;font-weight:800;color:var(--text-bright);margin-bottom:4px}
+.ux-card .screen-label{font-family:'IBM Plex Mono',monospace;font-size:10px;
+  color:var(--step-color,var(--cyan));margin-bottom:10px}
+.ux-card p{font-size:12px;color:var(--text-dim);line-height:1.6;margin-bottom:8px}
+.ux-card .ux-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.ux-card .ux-action{font-size:10px;padding:4px 10px;border-radius:4px;font-weight:700;
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text)}
+.ux-card .ux-action.primary{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan)}
+
+/* === DETAIL CALLOUT === */
+.callout{background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  padding:16px 20px;margin:20px 0;border-left:3px solid var(--callout-color,var(--amber))}
+.callout h5{font-size:12px;font-weight:800;color:var(--callout-color,var(--amber));margin-bottom:6px;
+  text-transform:uppercase;letter-spacing:.5px}
+.callout p{font-size:12px;color:var(--text-dim);line-height:1.6}
+
+/* === SECTION DIVIDER === */
+.section-break{margin:40px 0 32px;display:flex;align-items:center;gap:12px}
+.section-break span{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:2px;color:var(--text-dim);white-space:nowrap}
+.section-break::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+
+/* === RESPONSIVE === */
+@media(max-width:768px){
+  .panel{padding:20px 16px 40px}
+  .node{min-width:120px;padding:10px 12px}
+  .ux-timeline{padding-left:40px}
+  .platform-grid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <h1><em>Veritas</em> AI — Data Flow Diagrams</h1>
+  <p>Three views: File upload processing, video call platform integrations, and end-to-end user experience</p>
+</div>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showPanel('upload')"><span class="emoji">📄</span>File Upload Flow</button>
+  <button class="tab-btn" onclick="showPanel('call')"><span class="emoji">📹</span>Video Call Flow</button>
+  <button class="tab-btn" onclick="showPanel('ux')"><span class="emoji">👤</span>User Experience Flow</button>
+</div>
+
+<!-- ============================================================ -->
+<!-- FILE UPLOAD FLOW                                              -->
+<!-- ============================================================ -->
+<div id="upload" class="panel active">
+  <div class="flow-title">Manual File Upload — Processing Pipeline</div>
+  <div class="flow-subtitle">
+    User uploads a pre-recorded video file (MP4, MOV, WebM, MKV). The system ingests, validates, compresses,
+    then runs the full tri-vector analysis asynchronously. Results are delivered as a timestamped report.
+  </div>
+
+  <div class="swim-lanes">
+
+    <!-- LANE 1: MOBILE CLIENT -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--cyan)"></span> Mobile Client</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">📱</div>
+          <div class="n-title">File Picker</div>
+          <div class="n-tech">Android: SAF / iOS: PHPicker</div>
+          <div class="n-desc">User selects video file from device storage, camera roll, or cloud storage (Google Drive, iCloud, Dropbox).</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">✅</div>
+          <div class="n-title">Client Validation</div>
+          <div class="n-tech">Ktor + MediaCodec probe</div>
+          <div class="n-desc">File type check (MP4/MOV/WebM/MKV). Size cap enforcement (2GB max). Duration check (≤4 hours). Corrupt file detection via header probe.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">🗜️</div>
+          <div class="n-title">On-Device Compress</div>
+          <div class="n-tech">H.265/HEVC via MediaCodec</div>
+          <div class="n-desc">Re-encode to 720p@24fps CRF 28 if source exceeds quality threshold. Skip if already ≤720p. Reduces upload size 40-60%.</div>
+          <span class="n-badge" style="background:var(--cyan-dim);color:var(--cyan)">Optional</span>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg><span class="a-label">TLS 1.3</span></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">📤</div>
+          <div class="n-title">Chunked Upload</div>
+          <div class="n-tech">TUS Protocol / Resumable</div>
+          <div class="n-desc">Resumable chunked upload (5MB chunks). Progress bar on client. Auto-retry on network interruption. SHA-256 checksum per chunk.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 2: INGESTION -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--blue)"></span> Ingestion Layer</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--blue)">
+          <div class="n-icon">🚪</div>
+          <div class="n-title">API Gateway</div>
+          <div class="n-tech">FastAPI — POST /uploads/video</div>
+          <div class="n-desc">JWT auth validation. Rate limit check (5 uploads/hour). Chunk reassembly. Full-file integrity verification. Assigns job_id.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--blue)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--blue)">
+          <div class="n-icon">📦</div>
+          <div class="n-title">Object Store Write</div>
+          <div class="n-tech">MinIO — uploads/{user}/{job_id}/</div>
+          <div class="n-desc">Original file stored in hot tier. AES-256-GCM encryption at rest with per-user key from Vault. Metadata written to PostgreSQL.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--blue)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--blue)">
+          <div class="n-icon">📨</div>
+          <div class="n-title">Job Queue Dispatch</div>
+          <div class="n-tech">Celery via Redis</div>
+          <div class="n-desc">Analysis job queued with priority (paid tier = higher). WebSocket channel opened for client to receive progress updates.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 3: EXTRACTION -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--violet)"></span> Extraction Pipeline</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">🎬</div>
+          <div class="n-title">FFmpeg Demux</div>
+          <div class="n-tech">ffmpeg -i input.mp4</div>
+          <div class="n-desc">Separates video and audio streams. Extracts duration, framerate, codec info. Produces PCM audio (16kHz mono) for transcription.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="parallel-group">
+          <div class="parallel-label">PARALLEL EXTRACTION</div>
+          <div class="node" style="--node-color:var(--blue)">
+            <div class="n-icon">👁️</div>
+            <div class="n-title">Video → Landmarks</div>
+            <div class="n-tech">MediaPipe Face Mesh (server)</div>
+            <div class="n-desc">Extract 478 facial landmarks per frame at native fps. Output: protobuf landmark stream with frame timestamps.</div>
+          </div>
+          <div class="node" style="--node-color:var(--amber)">
+            <div class="n-icon">🎤</div>
+            <div class="n-title">Audio → Transcript</div>
+            <div class="n-tech">faster-whisper large-v3</div>
+            <div class="n-desc">Demucs source separation first (isolate voice from bg). Then Whisper with word-level timestamps. Language auto-detect.</div>
+          </div>
+          <div class="node" style="--node-color:var(--rose)">
+            <div class="n-icon">🔊</div>
+            <div class="n-title">Audio → Embeddings</div>
+            <div class="n-tech">emotion2vec+ large</div>
+            <div class="n-desc">1-second windows, 0.5s stride. Produces 768-dim emotion embeddings + Praat features (F0, jitter, shimmer, HNR).</div>
+          </div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">💾</div>
+          <div class="n-title">Cache Embeddings</div>
+          <div class="n-tech">EmbeddingCache → MinIO</div>
+          <div class="n-desc">All extracted features cached for retraining. Landmark data, audio embeddings, and transcript stored with temporal alignment.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 4: ANALYSIS -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--amber)"></span> Analysis Engines</div>
+      <div class="node-row">
+        <div class="parallel-group">
+          <div class="parallel-label">TRI-VECTOR ANALYSIS</div>
+          <div class="node" style="--node-color:var(--blue)">
+            <div class="n-icon">👀</div>
+            <div class="n-title">Gaze Deviation</div>
+            <div class="n-tech">TCN on landmarks → z-score</div>
+            <div class="n-desc">Score per statement window. Compare gaze patterns against contact baseline. Output: deviation_score, blink_anomaly, head_pose_delta per segment.</div>
+          </div>
+          <div class="node" style="--node-color:var(--amber)">
+            <div class="n-icon">🔊</div>
+            <div class="n-title">Tonality Flux</div>
+            <div class="n-tech">emotion2vec + Praat → XGBoost</div>
+            <div class="n-desc">Cosine distance between consecutive embedding windows. Praat delta from baseline. Output: flux_score, stress_indicators per segment.</div>
+          </div>
+          <div class="node" style="--node-color:var(--red)">
+            <div class="n-icon">📝</div>
+            <div class="n-title">Contradiction NLP</div>
+            <div class="n-tech">DeBERTa-v3 + pgvector</div>
+            <div class="n-desc">Each statement embedded → top-5 similar history retrieved → NLI classification. Output: contradiction_score, matched_statements per segment.</div>
+          </div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--amber)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--amber)">
+          <div class="n-icon">🎯</div>
+          <div class="n-title">Composite Scorer</div>
+          <div class="n-tech">XGBoost + Platt Calibration</div>
+          <div class="n-desc">12 features per window → 0-100 calibrated probability. Per-vector breakdown. SHAP explainability values. Confidence interval based on baseline quality.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--amber)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">📊</div>
+          <div class="n-title">Report Generation</div>
+          <div class="n-tech">POST to PostgreSQL + push WS</div>
+          <div class="n-desc">Timestamped analysis report stored. Statement-level scores with transcript alignment. Push notification to client via WebSocket. Status → "complete".</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 5: STORAGE LIFECYCLE -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--rose)"></span> Storage Lifecycle</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--red)">
+          <div class="n-icon">🔥</div>
+          <div class="n-title">Hot Tier (0-30d)</div>
+          <div class="n-tech">SSD — Full Payload</div>
+          <div class="n-desc">AV1 re-encoded video + audio + landmarks + transcript + scores. Instant playback. ~$1.15/user/mo.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--rose)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg><span class="a-label">30 DAYS</span></div>
+        <div class="node" style="--node-color:var(--amber)">
+          <div class="n-icon">♨️</div>
+          <div class="n-title">Warm Tier (30-90d)</div>
+          <div class="n-tech">HDD/S3-IA — Video Deleted</div>
+          <div class="n-desc">Audio + landmarks + transcript + scores. Video purged. Can re-derive gaze analysis from landmarks. ~$0.22/user/mo.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--rose)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg><span class="a-label">90 DAYS</span></div>
+        <div class="node" style="--node-color:var(--blue)">
+          <div class="n-icon">❄️</div>
+          <div class="n-title">Cold Tier (90-365d)</div>
+          <div class="n-tech">Glacier — Scores Only</div>
+          <div class="n-desc">Transcript + scores + statement embeddings. Enough for contradiction history. ~$0.04/user/mo.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--rose)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg><span class="a-label">365 DAYS</span></div>
+        <div class="node" style="--node-color:var(--text-dim)">
+          <div class="n-icon">🗑️</div>
+          <div class="n-title">Purge</div>
+          <div class="n-tech">GDPR / BIPA Compliant</div>
+          <div class="n-desc">All PII deleted. Only anonymized aggregate training data retained with explicit user consent.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout" style="--callout-color:var(--amber)">
+    <h5>Processing Time Estimates</h5>
+    <p>A 20-minute uploaded video takes approximately 3-5 minutes to fully process (extraction + all three analysis vectors). 
+    The bottleneck is Whisper transcription and emotion2vec embedding extraction, which run in parallel. 
+    The client receives real-time progress updates: "Extracting audio…" → "Transcribing…" → "Analyzing gaze…" → "Scoring…" → "Complete."</p>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- VIDEO CALL FLOW                                               -->
+<!-- ============================================================ -->
+<div id="call" class="panel">
+  <div class="flow-title">Video Call — Platform Integration Architecture</div>
+  <div class="flow-subtitle">
+    Connects to third-party video platforms via their published APIs and webhook integrations.
+    Both participants must authorize recording. Analysis runs in near-real-time during the call with scores delivered via WebSocket.
+  </div>
+
+  <!-- PLATFORM GRID -->
+  <div class="section-break"><span>Supported Platforms</span></div>
+  <div class="platform-grid">
+    <div class="platform-chip">
+      <div class="p-icon">🟦</div>
+      <div class="p-name">Zoom</div>
+      <div class="p-method">Meeting SDK + Webhooks</div>
+    </div>
+    <div class="platform-chip">
+      <div class="p-icon">🟣</div>
+      <div class="p-name">Microsoft Teams</div>
+      <div class="p-method">Graph API + Bot Framework</div>
+    </div>
+    <div class="platform-chip">
+      <div class="p-icon">🟢</div>
+      <div class="p-name">Google Meet</div>
+      <div class="p-method">Meet REST API + Add-on SDK</div>
+    </div>
+    <div class="platform-chip">
+      <div class="p-icon">🔵</div>
+      <div class="p-name">Webex</div>
+      <div class="p-method">Meetings API + Webhooks</div>
+    </div>
+    <div class="platform-chip">
+      <div class="p-icon">🟡</div>
+      <div class="p-name">Slack Huddles</div>
+      <div class="p-method">Events API + RTMP</div>
+    </div>
+    <div class="platform-chip">
+      <div class="p-icon">🔴</div>
+      <div class="p-name">Native (LiveKit)</div>
+      <div class="p-method">Direct WebRTC SFU</div>
+    </div>
+  </div>
+
+  <div class="callout" style="--callout-color:var(--cyan)">
+    <h5>Integration Strategy — Abstraction Layer</h5>
+    <p>Each platform implements a <code>PlatformConnector</code> interface with four methods: <code>authorize()</code>, <code>join_meeting()</code>, 
+    <code>stream_media()</code>, and <code>get_recording()</code>. The connector abstracts whether media arrives as a real-time stream (Zoom SDK, LiveKit) 
+    or as a post-meeting recording download (Teams Graph API, Meet). The analysis pipeline consumes from either path identically.</p>
+  </div>
+
+  <div class="swim-lanes">
+
+    <!-- LANE 1: AUTHORIZATION -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--cyan)"></span> Authorization &amp; Consent</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">🔗</div>
+          <div class="n-title">OAuth2 Connect</div>
+          <div class="n-tech">Platform-specific OAuth flow</div>
+          <div class="n-desc">User authorizes Veritas to access their platform account. Scopes: read meetings, join as bot/observer, access recordings. Refresh tokens stored in Vault.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">📋</div>
+          <div class="n-title">Meeting Detection</div>
+          <div class="n-tech">Webhooks / Calendar Sync</div>
+          <div class="n-desc">Platform webhook fires on meeting start (Zoom: meeting.started, Teams: /communications/callRecords). Or user manually triggers from app.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--red)">
+          <div class="n-icon">⚠️</div>
+          <div class="n-title">Dual Consent Gate</div>
+          <div class="n-tech">Both participants must consent</div>
+          <div class="n-desc">In-app consent modal pushed to both users. If the other party doesn't have Veritas, they receive a web link to a consent form. Recording blocked until both consent tokens received. Tokens are signed JWTs stored for audit.</div>
+          <span class="n-badge" style="background:var(--red-dim);color:var(--red)">REQUIRED</span>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">✅</div>
+          <div class="n-title">Analysis Enabled</div>
+          <div class="n-tech">Consent tokens verified</div>
+          <div class="n-desc">Both consent tokens validated. Platform connector activated. Media pipeline initiated. Either user can revoke at any time → immediate stop.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 2: MEDIA ACQUISITION — TWO PATHS -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--blue)"></span> Media Acquisition (Two Paths)</div>
+      <div class="node-row">
+        <div class="parallel-group" style="min-width:240px">
+          <div class="parallel-label">PATH A — REAL-TIME STREAM</div>
+          <div class="node" style="--node-color:var(--blue)">
+            <div class="n-icon">🎥</div>
+            <div class="n-title">Bot Joins Meeting</div>
+            <div class="n-tech">Zoom SDK Bot / Teams Bot / LiveKit</div>
+            <div class="n-desc">Veritas bot joins as silent observer. Receives raw media streams (video + audio) from the platform's SFU. For Zoom: Meeting SDK media stream. For Teams: Bot media platform. For LiveKit: direct WebRTC subscription.</div>
+          </div>
+          <div class="node" style="--node-color:var(--blue)">
+            <div class="n-icon">📡</div>
+            <div class="n-title">Live Media Router</div>
+            <div class="n-tech">Kafka ingestion → frame dispatch</div>
+            <div class="n-desc">Audio chunks (200ms) → transcription pipeline. Video frames (5fps sample) → MediaPipe landmark extraction. Both feed into Kafka topics for parallel real-time analysis.</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:60px;flex-shrink:0">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-dim);writing-mode:vertical-rl;letter-spacing:2px">OR</span>
+        </div>
+        <div class="parallel-group" style="min-width:240px">
+          <div class="parallel-label">PATH B — POST-CALL RECORDING</div>
+          <div class="node" style="--node-color:var(--amber)">
+            <div class="n-icon">☁️</div>
+            <div class="n-title">Recording Webhook</div>
+            <div class="n-tech">Platform posts recording URL</div>
+            <div class="n-desc">After meeting ends, platform fires webhook with recording download URL. Zoom: recording.completed. Teams: callRecording available. Google Meet: recording in Drive.</div>
+          </div>
+          <div class="node" style="--node-color:var(--amber)">
+            <div class="n-icon">⬇️</div>
+            <div class="n-title">Recording Download</div>
+            <div class="n-tech">Celery worker fetches file</div>
+            <div class="n-desc">Worker downloads recording from platform cloud. Stored in MinIO. Then follows the same extraction pipeline as manual file upload (FFmpeg demux → parallel extraction).</div>
+          </div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg><span class="a-label">CONVERGE</span></div>
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">🔀</div>
+          <div class="n-title">Unified Pipeline</div>
+          <div class="n-tech">PlatformConnector abstraction</div>
+          <div class="n-desc">Both paths feed the same extraction + analysis pipeline. Real-time path produces incremental scores. Post-call path produces batch report. Same output schema.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 3: REAL-TIME ANALYSIS -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--amber)"></span> Real-Time Analysis (Path A Only)</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--blue)">
+          <div class="n-icon">👁️</div>
+          <div class="n-title">Live Gaze</div>
+          <div class="n-tech">MediaPipe → TCN (5fps sample)</div>
+          <div class="n-desc">Landmark extraction at 5fps (sufficient for gaze analysis, saves compute). TCN scores every 2-second window. Latency: ~500ms.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--amber)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--amber)">
+          <div class="n-icon">🎤</div>
+          <div class="n-title">Live Transcription</div>
+          <div class="n-tech">Whisper distil-large-v3 (streaming)</div>
+          <div class="n-desc">Streaming VAD-triggered transcription. Statement boundary detection. Each completed statement pushed to contradiction pipeline. Latency: ~2s.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--amber)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--rose)">
+          <div class="n-icon">🔊</div>
+          <div class="n-title">Live Tonality</div>
+          <div class="n-tech">Librosa handcrafted (fast path)</div>
+          <div class="n-desc">On-server handcrafted features (MFCC, F0, jitter) for real-time speed. Full emotion2vec analysis runs post-call for accuracy. Latency: ~300ms.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--amber)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">🎯</div>
+          <div class="n-title">Live Score Push</div>
+          <div class="n-tech">XGBoost → WebSocket</div>
+          <div class="n-desc">Composite score computed every statement boundary. Pushed to client via WebSocket. Includes per-vector breakdown and confidence level. Total latency: ~2-3s from speech.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LANE 4: POST-CALL ENHANCEMENT -->
+    <div class="lane">
+      <div class="lane-label"><span class="lane-dot" style="background:var(--violet)"></span> Post-Call Enhancement</div>
+      <div class="node-row">
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">🔄</div>
+          <div class="n-title">Full Re-Analysis</div>
+          <div class="n-tech">emotion2vec + full Whisper</div>
+          <div class="n-desc">After call ends, run full accuracy pipeline (emotion2vec large, Whisper large-v3) on the complete recording. Produces higher-accuracy scores than real-time.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">📈</div>
+          <div class="n-title">Baseline Update</div>
+          <div class="n-tech">Per-contact stats refresh</div>
+          <div class="n-desc">Update contact's gaze baseline (mean/std), tonality baseline (F0 range, speaking rate), and linguistic profile (hedging frequency, vocabulary). Exponential moving average.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--violet)">
+          <div class="n-icon">🧠</div>
+          <div class="n-title">Adapter Retrain Check</div>
+          <div class="n-tech">Every 3rd call triggers retrain</div>
+          <div class="n-desc">If call_count % 3 == 0, queue XGBoost scorer retraining with all historical features for this contact. ~$0.15/retrain. Version new adapter in MinIO.</div>
+        </div>
+        <div class="arrow" style="--arrow-color:var(--violet)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
+        <div class="node" style="--node-color:var(--cyan)">
+          <div class="n-icon">📊</div>
+          <div class="n-title">Enhanced Report</div>
+          <div class="n-tech">Replaces live scores</div>
+          <div class="n-desc">Final report replaces real-time scores with full-accuracy scores. User notified "Enhanced analysis ready." Shows score delta from live vs. enhanced.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout" style="--callout-color:var(--violet)">
+    <h5>Platform Connector Details</h5>
+    <p><strong>Zoom:</strong> Meeting SDK (native) for real-time media access. Raw Media component captures audio/video streams directly. Requires Zoom Marketplace app approval.<br>
+    <strong>Teams:</strong> Bot Framework + Communications API. Bot joins as participant via Graph API. Real-time media platform for audio/video. Requires Azure AD app registration + admin consent.<br>
+    <strong>Google Meet:</strong> Meet REST API (GA 2024) + Meet Add-ons SDK for in-meeting integration. Cloud recording download via Drive API for post-call. Requires Google Workspace Marketplace listing.<br>
+    <strong>Webex:</strong> Meetings API for scheduling + Webhooks for meeting events. Recording download via API. Bot capability for real-time access.<br>
+    <strong>Slack:</strong> Events API for huddle detection. RTMP-based media relay for audio. Limited video access — audio-only analysis for Slack.<br>
+    <strong>LiveKit (Native):</strong> Direct WebRTC with full media control. Lowest latency. Best quality. Used when both parties are on Veritas native calls.</p>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- UX FLOW                                                       -->
+<!-- ============================================================ -->
+<div id="ux" class="panel">
+  <div class="flow-title">User Experience Flow — End-to-End Journey</div>
+  <div class="flow-subtitle">
+    From first install through onboarding, platform connection, live analysis, and report review.
+    Covers both the "analyzer" (the user running Veritas) and the "subject" (the other call participant).
+  </div>
+
+  <div class="section-break"><span>Onboarding &amp; Setup</span></div>
+
+  <div class="ux-timeline">
+    <div class="ux-step" style="--step-color:var(--cyan)">
+      <div class="step-dot">📲</div>
+      <div class="step-number">STEP 1</div>
+      <div class="ux-card">
+        <h4>App Install & Registration</h4>
+        <div class="screen-label">Screen: Welcome / Sign Up</div>
+        <p>User downloads from Play Store (Android first). Welcome screen with value prop. Three sign-up paths available.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">Create Account (Email + Password)</span>
+          <span class="ux-action">Continue with Google (SSO)</span>
+          <span class="ux-action">Continue with Microsoft (SSO)</span>
+        </div>
+        <p style="margin-top:10px">Password requirements: 12+ characters, checked against HaveIBeenPwned breach database. MFA setup prompted immediately after (TOTP or Passkey).</p>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--cyan)">
+      <div class="step-dot">🔗</div>
+      <div class="step-number">STEP 2</div>
+      <div class="ux-card">
+        <h4>Platform Connections</h4>
+        <div class="screen-label">Screen: Connect Your Platforms</div>
+        <p>User connects their video call platforms. Each connection launches the platform's OAuth flow in a browser. Multiple platforms can be connected.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">Connect Zoom</span>
+          <span class="ux-action">Connect Teams</span>
+          <span class="ux-action">Connect Google Meet</span>
+          <span class="ux-action">Connect Webex</span>
+        </div>
+        <p style="margin-top:10px">Each OAuth flow requests minimum scopes: meeting read, recording access, bot join permission. User sees exactly which permissions are requested. Skip option available — user can connect platforms later or use upload-only mode.</p>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--blue)">
+      <div class="step-dot">🏠</div>
+      <div class="step-number">STEP 3</div>
+      <div class="ux-card">
+        <h4>Home Dashboard</h4>
+        <div class="screen-label">Screen: Main Dashboard</div>
+        <p>Central hub showing recent analyses, upcoming meetings (synced from connected calendars), contacts with baseline status, and quick-action buttons.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">Start Native Call</span>
+          <span class="ux-action primary">Upload Video</span>
+          <span class="ux-action">View Contacts</span>
+          <span class="ux-action">Settings</span>
+        </div>
+        <p style="margin-top:10px">Dashboard cards: "Next Meeting: 2:00 PM Zoom with Sarah — Analysis Ready" / "Recent: Call with Mark — Score: 73/100" / "Contact Baseline: 3 contacts need more calls for reliable scoring."</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-break"><span>Video Call Analysis Path</span></div>
+
+  <div class="ux-timeline">
+    <div class="ux-step" style="--step-color:var(--amber)">
+      <div class="step-dot">📅</div>
+      <div class="step-number">STEP 4a</div>
+      <div class="ux-card">
+        <h4>Meeting Trigger</h4>
+        <div class="screen-label">Screen: Meeting Detected / Manual Start</div>
+        <p>Two triggers: (A) Automatic — Veritas detects an upcoming/active meeting via platform webhook and sends a push notification: "Zoom meeting starting. Enable analysis?" (B) Manual — User taps "Start Native Call" and invites a contact.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">Enable Analysis</span>
+          <span class="ux-action">Skip This Meeting</span>
+          <span class="ux-action">Always Analyze (contact setting)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--red)">
+      <div class="step-dot">⚠️</div>
+      <div class="step-number">STEP 5a</div>
+      <div class="ux-card">
+        <h4>Dual Consent Collection</h4>
+        <div class="screen-label">Screen: Consent Modal (Both Parties)</div>
+        <p>Critical legal gate. Both participants must explicitly consent before any recording or analysis begins.</p>
+        <p><strong>If other party has Veritas installed:</strong> In-app consent modal appears on their device: "This call will be recorded and analyzed by Veritas AI. Your behavioral data will be processed. Do you consent?"</p>
+        <p><strong>If other party does NOT have Veritas:</strong> They receive an SMS/email with a web link to a consent form. The form explains what data is collected and how it's used. Consent is time-bound to this specific meeting.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">I Consent</span>
+          <span class="ux-action">Decline (call continues, no recording)</span>
+          <span class="ux-action">Learn More (explainer page)</span>
+        </div>
+        <p style="margin-top:10px">If either party declines: the call proceeds normally but with zero recording or analysis. The user is notified: "Analysis unavailable — consent not granted by all participants."</p>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--amber)">
+      <div class="step-dot">🎥</div>
+      <div class="step-number">STEP 6a</div>
+      <div class="ux-card">
+        <h4>Live Call with Real-Time Scoring</h4>
+        <div class="screen-label">Screen: Active Call Overlay / Companion View</div>
+        <p>During the call, the user sees a subtle companion overlay (or a separate split-screen panel on tablet). The overlay shows:</p>
+        <p><strong>Live Elements:</strong> Rolling composite score (0-100 gauge), per-vector mini indicators (eye icon for gaze, waveform for tonality, text icon for NLP), live transcript with highlighted flagged statements, and a "confidence level" badge based on how much baseline data exists for this contact.</p>
+        <p><strong>UX Constraint:</strong> The overlay must NOT be visible to the other participant. On native calls (LiveKit), this is guaranteed. On platform calls (Zoom/Teams), the overlay runs in the Veritas app alongside the platform app — it's a separate window/notification layer.</p>
+        <div class="ux-actions">
+          <span class="ux-action">Minimize Overlay</span>
+          <span class="ux-action">Expand to Full Analysis</span>
+          <span class="ux-action primary">Flag Moment (manual bookmark)</span>
+          <span class="ux-action">Revoke Consent (stop analysis)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--violet)">
+      <div class="step-dot">📊</div>
+      <div class="step-number">STEP 7a</div>
+      <div class="ux-card">
+        <h4>Post-Call Report</h4>
+        <div class="screen-label">Screen: Analysis Report</div>
+        <p>After the call ends, the enhanced analysis runs (full-accuracy models). User receives a push notification when ready (3-5 minutes). The report contains:</p>
+        <p><strong>Summary Card:</strong> Overall score, per-vector breakdown, confidence level, comparison to previous calls with this contact.</p>
+        <p><strong>Timeline View:</strong> Scrubable timeline synced with transcript. Each statement has individual scores. Flagged moments highlighted. Tap any statement to see: gaze deviation chart at that moment, tonality waveform, and any contradictions found with historical statements (showing the matched statement and when it was said).</p>
+        <p><strong>Trends View:</strong> If 3+ calls exist with this contact, shows score trends over time. "Baseline quality: Strong (5 calls)" or "Baseline quality: Low — 2 more calls needed for reliable scoring."</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">View Full Timeline</span>
+          <span class="ux-action">Share Report (encrypted PDF)</span>
+          <span class="ux-action">Export Transcript</span>
+          <span class="ux-action">Delete Recording</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-break"><span>File Upload Analysis Path</span></div>
+
+  <div class="ux-timeline">
+    <div class="ux-step" style="--step-color:var(--rose)">
+      <div class="step-dot">📄</div>
+      <div class="step-number">STEP 4b</div>
+      <div class="ux-card">
+        <h4>File Upload</h4>
+        <div class="screen-label">Screen: Upload Video</div>
+        <p>User taps "Upload Video" from dashboard. File picker opens (device storage, Google Drive, iCloud, Dropbox). Supported: MP4, MOV, WebM, MKV up to 2GB / 4 hours.</p>
+        <p>User assigns the video to a contact (existing or new). This is required for baseline tracking and contradiction history. If the subject is new, a contact profile is created.</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">Select from Device</span>
+          <span class="ux-action">Select from Cloud Storage</span>
+          <span class="ux-action">Record Now (camera capture)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--rose)">
+      <div class="step-dot">⬆️</div>
+      <div class="step-number">STEP 5b</div>
+      <div class="ux-card">
+        <h4>Upload Progress & Consent Attestation</h4>
+        <div class="screen-label">Screen: Uploading + Consent Checkbox</div>
+        <p>Progress bar with percentage, estimated time, and resume capability. Below the progress bar, a required legal attestation:</p>
+        <p><em>"I attest that all individuals in this recording consented to being recorded and that I have the legal right to submit this recording for analysis. I understand that submitting recordings without consent may violate applicable laws."</em></p>
+        <div class="ux-actions">
+          <span class="ux-action primary">☑ I Attest & Upload</span>
+          <span class="ux-action">Cancel Upload</span>
+        </div>
+        <p style="margin-top:10px">Attestation is logged with timestamp and user ID. Does not replace actual dual consent but provides legal protection for the platform.</p>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--rose)">
+      <div class="step-dot">⏳</div>
+      <div class="step-number">STEP 6b</div>
+      <div class="ux-card">
+        <h4>Processing Status</h4>
+        <div class="screen-label">Screen: Analysis In Progress</div>
+        <p>Real-time status updates via WebSocket. The user can leave this screen — they'll get a push notification when done.</p>
+        <p>Status stages: "Uploading… 78%" → "Processing video…" → "Extracting audio…" → "Transcribing speech…" → "Analyzing gaze patterns…" → "Analyzing vocal tonality…" → "Checking statement consistency…" → "Generating report…" → "✅ Analysis Complete"</p>
+        <div class="ux-actions">
+          <span class="ux-action">Notify When Done</span>
+          <span class="ux-action">Cancel Processing</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--violet)">
+      <div class="step-dot">📊</div>
+      <div class="step-number">STEP 7b</div>
+      <div class="ux-card">
+        <h4>Analysis Report (Same as 7a)</h4>
+        <div class="screen-label">Screen: Analysis Report</div>
+        <p>Identical report format to video call analysis. Summary card, timeline view, per-statement scores, contradiction matches, and trend tracking. The only difference: upload reports show full-accuracy scores immediately (no "live → enhanced" upgrade step).</p>
+        <div class="ux-actions">
+          <span class="ux-action primary">View Full Timeline</span>
+          <span class="ux-action">Share Report</span>
+          <span class="ux-action">Re-Analyze with Updated Baseline</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-break"><span>Contact &amp; Settings Management</span></div>
+
+  <div class="ux-timeline">
+    <div class="ux-step" style="--step-color:var(--text-dim)">
+      <div class="step-dot">👤</div>
+      <div class="step-number">MANAGE</div>
+      <div class="ux-card" style="--step-color:var(--text-dim)">
+        <h4>Contact Profiles</h4>
+        <div class="screen-label">Screen: Contact Detail</div>
+        <p>Each contact has a profile showing: baseline quality indicator (1-5 bars based on call count), all historical analysis reports, score trend chart, statement history (searchable), and per-contact settings.</p>
+        <div class="ux-actions">
+          <span class="ux-action">View Analysis History</span>
+          <span class="ux-action">Search Statements</span>
+          <span class="ux-action">Force Baseline Reset</span>
+          <span class="ux-action">Delete All Data for Contact</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="ux-step" style="--step-color:var(--text-dim)">
+      <div class="step-dot">⚙️</div>
+      <div class="step-number">MANAGE</div>
+      <div class="ux-card" style="--step-color:var(--text-dim)">
+        <h4>Settings & Privacy</h4>
+        <div class="screen-label">Screen: App Settings</div>
+        <p>Account management, connected platforms, storage usage (with tier breakdown), data retention preferences (can shorten default lifecycle), export all data (GDPR), delete account and all data, notification preferences, and analysis sensitivity controls (adjust how aggressively the system flags deception).</p>
+        <div class="ux-actions">
+          <span class="ux-action">Manage Platforms</span>
+          <span class="ux-action">Storage & Retention</span>
+          <span class="ux-action">Export My Data</span>
+          <span class="ux-action" style="color:var(--red);border-color:var(--red)">Delete Account</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function showPanel(id){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
