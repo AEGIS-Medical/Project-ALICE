@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Veritas AI — System Flow Diagrams</title>
+<title>ALICE — System Flow Diagrams</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Instrument+Serif&family=Nunito+Sans:wght@400;600;700;800&display=swap');
 
@@ -151,7 +151,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
 <body>
 
 <div class="masthead">
-  <h1><em>Veritas</em> AI — Data Flow Diagrams</h1>
+  <h1><em>ALICE</em> AI — Data Flow Diagrams</h1>
   <p>Three views: File upload processing, video call platform integrations, and end-to-end user experience</p>
 </div>
 
@@ -426,7 +426,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
           <div class="n-icon">🔗</div>
           <div class="n-title">OAuth2 Connect</div>
           <div class="n-tech">Platform-specific OAuth flow</div>
-          <div class="n-desc">User authorizes Veritas to access their platform account. Scopes: read meetings, join as bot/observer, access recordings. Refresh tokens stored in Vault.</div>
+          <div class="n-desc">User authorizes ALICE to access their platform account. Scopes: read meetings, join as bot/observer, access recordings. Refresh tokens stored in Vault.</div>
         </div>
         <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
         <div class="node" style="--node-color:var(--cyan)">
@@ -440,7 +440,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
           <div class="n-icon">⚠️</div>
           <div class="n-title">Dual Consent Gate</div>
           <div class="n-tech">Both participants must consent</div>
-          <div class="n-desc">In-app consent modal pushed to both users. If the other party doesn't have Veritas, they receive a web link to a consent form. Recording blocked until both consent tokens received. Tokens are signed JWTs stored for audit.</div>
+          <div class="n-desc">In-app consent modal pushed to both users. If the other party doesn't have ALICE, they receive a web link to a consent form. Recording blocked until both consent tokens received. Tokens are signed JWTs stored for audit.</div>
           <span class="n-badge" style="background:var(--red-dim);color:var(--red)">REQUIRED</span>
         </div>
         <div class="arrow" style="--arrow-color:var(--cyan)"><svg viewBox="0 0 28 28"><line class="arrow-line" x1="2" y1="14" x2="22" y2="14"/><polygon class="arrow-head" points="20,10 28,14 20,18"/></svg></div>
@@ -463,7 +463,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
             <div class="n-icon">🎥</div>
             <div class="n-title">Bot Joins Meeting</div>
             <div class="n-tech">Zoom SDK Bot / Teams Bot / LiveKit</div>
-            <div class="n-desc">Veritas bot joins as silent observer. Receives raw media streams (video + audio) from the platform's SFU. For Zoom: Meeting SDK media stream. For Teams: Bot media platform. For LiveKit: direct WebRTC subscription.</div>
+            <div class="n-desc">ALICE bot joins as silent observer. Receives raw media streams (video + audio) from the platform's SFU. For Zoom: Meeting SDK media stream. For Teams: Bot media platform. For LiveKit: direct WebRTC subscription.</div>
           </div>
           <div class="node" style="--node-color:var(--blue)">
             <div class="n-icon">📡</div>
@@ -577,7 +577,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
     <strong>Google Meet:</strong> Meet REST API (GA 2024) + Meet Add-ons SDK for in-meeting integration. Cloud recording download via Drive API for post-call. Requires Google Workspace Marketplace listing.<br>
     <strong>Webex:</strong> Meetings API for scheduling + Webhooks for meeting events. Recording download via API. Bot capability for real-time access.<br>
     <strong>Slack:</strong> Events API for huddle detection. RTMP-based media relay for audio. Limited video access — audio-only analysis for Slack.<br>
-    <strong>LiveKit (Native):</strong> Direct WebRTC with full media control. Lowest latency. Best quality. Used when both parties are on Veritas native calls.</p>
+    <strong>LiveKit (Native):</strong> Direct WebRTC with full media control. Lowest latency. Best quality. Used when both parties are on ALICE native calls.</p>
   </div>
 </div>
 
@@ -589,7 +589,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
   <div class="flow-title">User Experience Flow — End-to-End Journey</div>
   <div class="flow-subtitle">
     From first install through onboarding, platform connection, live analysis, and report review.
-    Covers both the "analyzer" (the user running Veritas) and the "subject" (the other call participant).
+    Covers both the "analyzer" (the user running ALICE) and the "subject" (the other call participant).
   </div>
 
   <div class="section-break"><span>Onboarding &amp; Setup</span></div>
@@ -655,7 +655,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
       <div class="ux-card">
         <h4>Meeting Trigger</h4>
         <div class="screen-label">Screen: Meeting Detected / Manual Start</div>
-        <p>Two triggers: (A) Automatic — Veritas detects an upcoming/active meeting via platform webhook and sends a push notification: "Zoom meeting starting. Enable analysis?" (B) Manual — User taps "Start Native Call" and invites a contact.</p>
+        <p>Two triggers: (A) Automatic — ALICE detects an upcoming/active meeting via platform webhook and sends a push notification: "Zoom meeting starting. Enable analysis?" (B) Manual — User taps "Start Native Call" and invites a contact.</p>
         <div class="ux-actions">
           <span class="ux-action primary">Enable Analysis</span>
           <span class="ux-action">Skip This Meeting</span>
@@ -671,8 +671,8 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
         <h4>Dual Consent Collection</h4>
         <div class="screen-label">Screen: Consent Modal (Both Parties)</div>
         <p>Critical legal gate. Both participants must explicitly consent before any recording or analysis begins.</p>
-        <p><strong>If other party has Veritas installed:</strong> In-app consent modal appears on their device: "This call will be recorded and analyzed by Veritas AI. Your behavioral data will be processed. Do you consent?"</p>
-        <p><strong>If other party does NOT have Veritas:</strong> They receive an SMS/email with a web link to a consent form. The form explains what data is collected and how it's used. Consent is time-bound to this specific meeting.</p>
+        <p><strong>If other party has ALICE installed:</strong> In-app consent modal appears on their device: "This call will be recorded and analyzed by ALICE AI. Your behavioral data will be processed. Do you consent?"</p>
+        <p><strong>If other party does NOT have ALICE:</strong> They receive an SMS/email with a web link to a consent form. The form explains what data is collected and how it's used. Consent is time-bound to this specific meeting.</p>
         <div class="ux-actions">
           <span class="ux-action primary">I Consent</span>
           <span class="ux-action">Decline (call continues, no recording)</span>
@@ -690,7 +690,7 @@ body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text)
         <div class="screen-label">Screen: Active Call Overlay / Companion View</div>
         <p>During the call, the user sees a subtle companion overlay (or a separate split-screen panel on tablet). The overlay shows:</p>
         <p><strong>Live Elements:</strong> Rolling composite score (0-100 gauge), per-vector mini indicators (eye icon for gaze, waveform for tonality, text icon for NLP), live transcript with highlighted flagged statements, and a "confidence level" badge based on how much baseline data exists for this contact.</p>
-        <p><strong>UX Constraint:</strong> The overlay must NOT be visible to the other participant. On native calls (LiveKit), this is guaranteed. On platform calls (Zoom/Teams), the overlay runs in the Veritas app alongside the platform app — it's a separate window/notification layer.</p>
+        <p><strong>UX Constraint:</strong> The overlay must NOT be visible to the other participant. On native calls (LiveKit), this is guaranteed. On platform calls (Zoom/Teams), the overlay runs in the ALICE app alongside the platform app — it's a separate window/notification layer.</p>
         <div class="ux-actions">
           <span class="ux-action">Minimize Overlay</span>
           <span class="ux-action">Expand to Full Analysis</span>
