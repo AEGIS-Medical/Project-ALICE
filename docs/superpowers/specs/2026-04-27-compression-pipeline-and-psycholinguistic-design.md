@@ -1,22 +1,72 @@
 # ALICE — Compression Pipeline Completion + Psycholinguistic Analyzer
-## Design Spec · 2026-04-27
+## Design Spec · 2026-04-27 (revised 2026-05-24)
+
+---
+
+## Status Update — 2026-05-24
+
+**Phase 1 is complete.** All five original Phase 1 stories shipped as of the
+Day 1 compression pipeline commit. Three deviations from the original spec are
+documented in CLAUDE.md and repeated here:
+
+1. **MediaPipe Tasks API** (`vision.FaceLandmarker`) — the legacy `mp.solutions`
+   API was removed in mediapipe ≥ 0.10.30. All face landmark code uses the new
+   Tasks API with `.task` model files downloaded on first use.
+2. **ROI v1 is single-CRF** — CRF 22 (face present) / CRF 26 (no face), not a
+   per-pixel QP map. The per-frame bbox track is produced and will feed v2's
+   x265 zones.
+3. **`models.py` was added** (not in original spec) — handles lazy model
+   download and caching under `$ALICE_MODEL_CACHE` or `%LOCALAPPDATA%/project-alice/models`.
+
+**Three new bridging stories (P1-S6, P1-S7, P1-S8) have been added** based on
+a mobile high-usage analysis comparing CLAUDE.md architecture against the
+actual implementation. These address critical gaps that will cause failures under
+real mobile load before Phase 2 can safely ship.
+
+**Phase 2 (psycholinguistic) stories P2-S1 through P2-S10 are unchanged and
+still pending.**
+
+---
+
+## Mobile High-Usage Analysis
+
+### What CLAUDE.md specifies vs what the implementation delivers
+
+| CLAUDE.md requirement | Implementation | Risk |
+|---|---|---|
+| Protobuf telemetry ~70 KB/min | JSON landmarks — 14.8 MB for one test video | **CRITICAL** — unusable at <1 Mbps |
+| Stream landmarks progressively | Full in-memory accumulation before write | **HIGH** — OOM on Android for 60-min calls |
+| Platform-aware model cache | Windows-only `%LOCALAPPDATA%` path | **HIGH** — crashes on Android |
+| Mid-session tier switching | Tier fixed at session start | **MEDIUM** — mobile bandwidth fluctuates |
+| Async Kotlin bridge support | All calls synchronous blocking | **MEDIUM** — blocks mobile UI thread |
+| FLAC lossless always | ✅ enforced | OK |
+| Raw video never leaves device | ✅ EDGE modes produce no video | OK |
+| Adaptive tier selection | ✅ `select_mode()` correct | OK |
+| PII stripped from containers | ✅ `map_metadata=-1` everywhere | OK |
+
+The landmark JSON size discrepancy is the most severe issue. CLAUDE.md states
+the edge-first pipeline transmits ~70 KB/min protobuf telemetry. The real
+`extract_landmarks()` output for a verified test run was **14.8 MB** — roughly
+200× the budget. At EDGE_MINIMAL bandwidth (<1 Mbps = ~7.5 MB/min), the
+landmark file alone exceeds the entire uplink budget.
 
 ---
 
 ## Overview
 
-This spec covers two sequential phases that together deliver ALICE's first
-working end-to-end vertical slice:
+This spec covers three phases delivering ALICE's first working end-to-end
+vertical slice and mobile-safe foundation:
 
 ```
-Video file → Compression Pipeline → FLAC audio → Psycholinguistic Analyzer → Linguistic score
+Video file → Compression Pipeline → [streaming protobuf landmarks + FLAC audio]
+                                  → Psycholinguistic Analyzer → Linguistic score
 ```
 
-**Phase 1** finishes the compression pipeline started in Session 1.  
-**Phase 2** adds the psycholinguistic analysis module (Session 2 plan).
+**Phase 1** — COMPLETE. See status update above.  
+**Phase 1-Bridge** — Three new stories that fix mobile-critical gaps before Phase 2.  
+**Phase 2** — Psycholinguistic analysis module (all stories still pending).
 
-Both phases are in scope for a single implementation plan with independently
-testable stories.
+All stories are independently testable.
 
 ---
 
@@ -33,7 +83,10 @@ story explicitly targets them.
 
 ---
 
-## Phase 1 — Complete the Compression Pipeline
+## Phase 1 — Complete the Compression Pipeline ✅ DONE
+
+All stories shipped. See CLAUDE.md Implementation Status for verified results.
+The stories below are kept for traceability; acceptance criteria were met.
 
 ### Architecture
 
@@ -201,6 +254,134 @@ Stage execution per mode:
 - Running `python scripts/test_compression.py <valid_mp4>` exits 0 and prints table
 - Running with `--mode edge_full` shows N/A for ROI Video row
 - Running with a missing file exits 1 with a clear error message
+
+---
+
+---
+
+## Phase 1-Bridge — Mobile-Critical Fixes (NEW)
+
+These three stories must ship before Phase 2. They address the gaps identified
+in the mobile high-usage analysis above. All are in `backend/workers/app/compression/`.
+
+---
+
+### P1-S6: Streaming Landmark Emitter (Chunked Write)
+
+**Problem:** `extract_landmarks()` accumulates all frames as Python dicts in RAM
+before writing. For a 60-minute call at 30fps this is ~617MB — Android OOM kills
+the process. And the output is plain JSON (~14.8MB per test), violating the
+CLAUDE.md ~70KB/min telemetry budget by ~200×.
+
+**File:** `backend/workers/app/compression/feature_extractor.py` (modify existing)
+
+**Change:** Replace the in-memory list accumulation with a streaming JSON Lines
+writer. Each frame's record is serialised and flushed to disk immediately.
+The output format changes from a single JSON array to newline-delimited JSON
+(one JSON object per line, `.jsonl` extension) so readers can stream-parse it.
+
+```
+Before: records: list[dict] accumulated, then json.dump(records, fh)
+After:  open file once, write each frame as json.dumps(record) + "\n", flush every N frames
+```
+
+- `flush_interval: int = 30` param on `extract_landmarks()` — flush to disk every N frames (default 30 = 1s at 30fps)
+- Output file: `{stem}_landmarks.jsonl` (JSONL not JSON)
+- Peak RAM for landmarks drops from O(total_frames) to O(flush_interval)
+- `FeatureExtractor.__init__` gains `flush_interval: int = 30`
+
+**Acceptance criteria:**
+- Peak RSS during extraction of a 60-min video at 30fps stays below 200MB
+- Output file is valid JSONL (each line independently parseable)
+- File is written progressively — partial file exists after 5s even if process is killed
+- Existing callers of `extract_landmarks()` require no signature change (path return unchanged)
+- `CompressionResult.landmarks_path` suffix is now `.jsonl`; `CompressionResult` model validator updated to accept both `.json` and `.jsonl` during transition
+
+**Tests:** `tests/compression/test_feature_extractor.py`
+- `test_streaming_write_partial_file_on_interrupt` — kills thread mid-extraction, asserts partial JSONL is readable
+- `test_peak_memory_bounded` — uses `tracemalloc` to assert peak delta < 200MB on a synthetic 10-min video
+- `test_output_is_valid_jsonl` — asserts every line is independently `json.loads()`-able
+- `test_flush_interval_controls_disk_writes` — mocks `fh.flush`, asserts call count = frames / flush_interval
+
+---
+
+### P1-S7: Platform-Aware Model Cache Path
+
+**Problem:** `models.py` resolves model cache under `%LOCALAPPDATA%/project-alice/models`.
+`%LOCALAPPDATA%` is Windows-only — this env var is undefined on Android, Linux, and macOS.
+The Kotlin Multiplatform mobile client will bridge to Python workers; if the model
+cache path fails to resolve, the pipeline crashes on first use.
+
+**File:** `backend/workers/app/compression/models.py` (modify existing)
+
+**Change:** Replace the `%LOCALAPPDATA%`-specific resolution with a priority chain:
+
+```python
+def _default_model_cache() -> Path:
+    # 1. Explicit override — always wins (CI, Android, custom deploy)
+    if env := os.environ.get("ALICE_MODEL_CACHE"):
+        return Path(env)
+    # 2. Windows
+    if sys.platform == "win32":
+        return Path(os.environ["LOCALAPPDATA"]) / "project-alice" / "models"
+    # 3. Android (Termux / KMP bridge sets XDG_DATA_HOME to Context.filesDir)
+    if xdg := os.environ.get("XDG_DATA_HOME"):
+        return Path(xdg) / "project-alice" / "models"
+    # 4. macOS / Linux XDG standard
+    return Path.home() / ".local" / "share" / "project-alice" / "models"
+```
+
+**Acceptance criteria:**
+- On Windows with `LOCALAPPDATA` set: resolves to existing Windows path
+- With `ALICE_MODEL_CACHE=/tmp/test-models`: resolves to that path regardless of OS
+- With `XDG_DATA_HOME=/data/user/0/com.alice.app/files`: resolves correctly (Android simulation)
+- On Linux/macOS with no env vars set: resolves to `~/.local/share/project-alice/models`
+- `ALICE_MODEL_CACHE` always takes priority over platform detection
+
+**Tests:** `tests/compression/test_models.py`
+- `test_alice_model_cache_env_wins` — set env var, assert path matches
+- `test_windows_path_resolution` — mock `sys.platform="win32"`, mock `LOCALAPPDATA`
+- `test_xdg_data_home_resolution` — mock XDG, assert correct path
+- `test_linux_fallback` — clear all env vars, assert `~/.local/share/...`
+
+---
+
+### P1-S8: Mid-Session Bandwidth Tier Switching
+
+**Problem:** `CompressionPipeline.process()` selects a `CompressionMode` once at
+call start based on measured bandwidth. On mobile, bandwidth can drop from 5Mbps
+(ROI_ENCODED) to 0.3Mbps (EDGE_MINIMAL) mid-call. There is no mechanism to
+downgrade gracefully without restarting the entire pipeline.
+
+**File:** `backend/workers/app/compression/pipeline.py` (modify existing)
+
+**Change:** Add a `update_bandwidth(mbps: float) -> CompressionMode` method to
+`CompressionPipeline` that:
+1. Re-evaluates the target mode using `config.select_mode(mbps)`
+2. If the target mode is the same as current, returns current (no-op)
+3. If the target mode is lower fidelity (e.g., ROI → EDGE_FULL):
+   - Stops queuing video encode work
+   - Switches future frames to landmark extraction only
+   - Emits a `ModeTransitionEvent` to a caller-provided callback
+4. If the target mode is higher fidelity: schedules upgrade at next keyframe boundary
+5. Returns the new active mode
+
+Add `on_mode_change: Callable[[CompressionMode, CompressionMode], None] | None = None`
+to `CompressionPipeline.__init__` for the callback.
+
+**Acceptance criteria:**
+- Calling `update_bandwidth(0.5)` when current mode is `ROI_ENCODED` returns `EDGE_MINIMAL`
+- The `on_mode_change` callback is invoked with `(ROI_ENCODED, EDGE_MINIMAL)`
+- Calling `update_bandwidth(0.5)` when already `EDGE_MINIMAL` is a no-op (callback not fired)
+- Calling `update_bandwidth(12.0)` upgrades to `RAW` and fires callback
+- `CompressionResult` includes a `mode_transitions: list[tuple[float, CompressionMode]]` field
+  (timestamp → new mode) so callers can audit what happened
+
+**Tests:** `tests/compression/test_pipeline.py`
+- `test_bandwidth_downgrade_fires_callback`
+- `test_bandwidth_noop_when_same_mode`
+- `test_bandwidth_upgrade`
+- `test_mode_transitions_logged_in_result`
 
 ---
 
@@ -457,41 +638,47 @@ These must be enforced in every story:
 ```
 backend/
   shared/schemas/
-    media.py                          ✅ exists
+    media.py                          ✅ shipped
     psycholinguistic.py               ← P2-S1
   workers/app/compression/
-    audio_extractor.py                ✅ exists
-    roi_encoder.py                    ✅ exists
-    feature_extractor.py              ← P1-S1, P1-S2
-    pipeline.py                       ← P1-S3
-    __init__.py                       ← P1-S4
+    audio_extractor.py                ✅ shipped
+    roi_encoder.py                    ✅ shipped
+    feature_extractor.py              ✅ shipped → modified by P1-S6 (streaming JSONL)
+    pipeline.py                       ✅ shipped → modified by P1-S8 (tier switching)
+    models.py                         ✅ shipped → modified by P1-S7 (platform-aware cache)
+    __init__.py                       ✅ shipped
   ml-inference/app/pipelines/
     psycholinguistic/
       analyzer.py                     ← P2-S2 through P2-S9
 scripts/
-  test_compression.py                 ← P1-S5
+  test_compression.py                 ✅ shipped
   test_psycholinguistic.py            ← P2-S10
   test_compress_and_analyze.py        ← P2-S10
 tests/
   compression/
-    test_feature_extractor.py
-    test_pipeline.py
+    test_feature_extractor.py         ← P1-S6 tests added here
+    test_pipeline.py                  ← P1-S8 tests added here
+    test_models.py                    ← P1-S7 tests (new file)
   psycholinguistic/
     test_schemas.py
     test_analyzer.py
-pyproject.toml                        ← P1-S4
-Makefile                              ← P1-S4
+pyproject.toml                        ✅ shipped
+Makefile                              ✅ shipped
 ```
 
 ---
 
 ## Out of Scope (Next Plan)
 
+- Protobuf landmark wire format (replace JSONL with binary protobuf to hit the 70KB/min budget)
+- Async Python worker bridge for Kotlin Multiplatform
 - WhisperX transcription (bridges compression → psycholinguistic for real)
-- Facial AU analysis pipeline
-- Vocal tonality / emotion2vec+
+- Facial AU analysis pipeline (custom ResNet-18 + ME-GraphAU)
+- Vocal tonality / emotion2vec+ + Praat acoustics
 - Contradiction detection (DeBERTa NLI + pgvector)
 - Subject identification (LR-ASD + EdgeFace-XS)
 - Late fusion ensemble (XGBoost + Platt + SHAP)
-- Platform connectors (Zoom/Teams/Meet)
-- Mobile app
+- Platform connectors (Zoom/Teams/Meet/Webex/Slack/LiveKit)
+- Mobile app (Kotlin Multiplatform)
+- Storage lifecycle ILM, consent gate, retention purge
+- API gateway, Celery workers, Kafka, PostgreSQL
