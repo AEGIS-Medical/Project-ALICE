@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALICE — System Architecture & Data Flow</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Instrument+Serif&family=Nunito+Sans:wght@400;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#05080f;--s1:#0c1220;--s2:#111b2e;--s3:#162038;
+--border:#1a2744;--bhi:#2a3d66;
+--blue:#4a90ff;--cyan:#00d4aa;--amber:#ffb347;--red:#ff6b6b;--violet:#a78bfa;--rose:#f472b6;--lime:#84cc16;
+--text:#c8d6e5;--dim:#5a6f8a;--bright:#edf2f7;--white:#fff;
+}
+body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.hd{padding:28px 36px 20px;border-bottom:1px solid var(--border);background:linear-gradient(170deg,rgba(74,144,255,.04) 0%,transparent 40%,rgba(0,212,170,.03) 100%)}
+.hd h1{font-family:'Instrument Serif',serif;font-size:30px;font-weight:400;color:var(--white)}
+.hd h1 em{font-style:normal;color:var(--cyan)}
+.hd p{font-size:13px;color:var(--dim);margin-top:4px}
+.tabs{display:flex;border-bottom:1px solid var(--border);background:var(--s1);position:sticky;top:0;z-index:100}
+.tab{flex:1;padding:13px 8px;font-family:'Nunito Sans',sans-serif;font-size:12px;font-weight:700;color:var(--dim);background:none;border:none;cursor:pointer;border-bottom:2.5px solid transparent;transition:.25s;text-transform:uppercase;letter-spacing:1.2px}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.02)}
+.tab.on{color:var(--cyan);border-bottom-color:var(--cyan);background:rgba(0,212,170,.04)}
+.pnl{display:none;padding:32px 36px 60px}.pnl.on{display:block}
+.ft{font-family:'Instrument Serif',serif;font-size:22px;color:var(--white);margin-bottom:6px}
+.fs{font-size:12px;color:var(--dim);margin-bottom:28px;line-height:1.6;max-width:720px}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--dim);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.sl::after{content:'';flex:1;height:1px;background:var(--border)}
+.sb{margin:40px 0 32px;display:flex;align-items:center;gap:12px}
+.sb span{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:var(--dim);white-space:nowrap}
+.sb::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+/* Cards */
+.cg{display:grid;gap:16px;margin-bottom:24px}
+.cg3{grid-template-columns:repeat(3,1fr)}
+.cg5{grid-template-columns:repeat(5,1fr)}
+.cg4{grid-template-columns:repeat(4,1fr)}
+.cg2{grid-template-columns:repeat(2,1fr)}
+.cd{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:18px;transition:.3s;cursor:default;position:relative;overflow:hidden}
+.cd::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--cc,var(--blue));opacity:0;transition:.3s}
+.cd:hover{border-color:var(--cc,var(--blue));transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.35)}
+.cd:hover::before{opacity:1}
+.cd .ic{font-size:22px;margin-bottom:10px}
+.cd h3{font-size:13px;font-weight:800;color:var(--bright);margin-bottom:4px}
+.cd .tc{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--cc,var(--blue));margin-bottom:8px;opacity:.85}
+.cd p{font-size:11.5px;color:var(--dim);line-height:1.55}
+.cd .bg{position:absolute;top:8px;right:8px;font-size:8px;font-weight:700;padding:2px 6px;border-radius:3px;text-transform:uppercase;letter-spacing:.5px}
+.cd .wt{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;margin-top:8px;padding:4px 8px;border-radius:4px;display:inline-block}
+/* Flow nodes */
+.fr{display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px;margin-bottom:16px}
+.fr::-webkit-scrollbar{height:4px}
+.fr::-webkit-scrollbar-thumb{background:var(--bhi);border-radius:4px}
+.nd{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:13px 15px;min-width:145px;max-width:195px;flex-shrink:0;transition:.3s}
+.nd:hover{border-color:var(--nc,var(--blue));transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.nd .nl{font-size:12px;font-weight:800;color:var(--bright);margin-bottom:3px}
+.nd .ns{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--nc,var(--blue));margin-bottom:5px;opacity:.8}
+.nd .np{font-size:10.5px;color:var(--dim);line-height:1.5}
+.nd .ni{font-size:18px;margin-bottom:6px}
+.ar{display:flex;align-items:center;justify-content:center;min-width:32px;flex-shrink:0}
+.ar svg{width:24px;height:24px}
+.ar .al{stroke:var(--ac,var(--blue));stroke-width:1.5;fill:none;opacity:.5;stroke-dasharray:6 4;animation:dash 1.5s linear infinite}
+.ar .ah{fill:var(--ac,var(--blue));opacity:.7}
+@keyframes dash{to{stroke-dashoffset:-20}}
+.ar .lb{position:absolute;top:-13px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--dim);white-space:nowrap;letter-spacing:.5px}
+.pg{display:flex;flex-direction:column;gap:7px;min-width:175px;flex-shrink:0}
+.pg .nd{min-width:unset;max-width:unset;width:100%}
+.pg .pl{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);text-align:center;padding:2px 8px;background:var(--s2);border-radius:4px;letter-spacing:1px}
+/* Callout */
+.co{background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:20px 0;border-left:3px solid var(--coc,var(--amber))}
+.co h5{font-size:12px;font-weight:800;color:var(--coc,var(--amber));margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.co p{font-size:12px;color:var(--dim);line-height:1.6}
+/* UX timeline */
+.ut{position:relative;padding-left:48px}
+.ut::before{content:'';position:absolute;left:19px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,var(--cyan),var(--blue),var(--violet),var(--amber),var(--cyan))}
+.us{position:relative;margin-bottom:32px}
+.us .sd{position:absolute;left:-48px;top:4px;width:36px;height:36px;border-radius:50%;background:var(--s2);border:2px solid var(--sc,var(--cyan));display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2}
+.us .sn{position:absolute;left:-48px;top:44px;width:36px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:600;color:var(--sc,var(--cyan))}
+.uc{background:var(--s1);border:1px solid var(--border);border-radius:11px;padding:18px 20px;margin-left:12px;transition:.3s;border-left:3px solid var(--sc,var(--cyan))}
+.uc:hover{border-color:var(--sc,var(--cyan));box-shadow:0 8px 28px rgba(0,0,0,.3)}
+.uc h4{font-size:14px;font-weight:800;color:var(--bright);margin-bottom:3px}
+.uc .scl{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--sc,var(--cyan));margin-bottom:9px}
+.uc p{font-size:12px;color:var(--dim);line-height:1.6;margin-bottom:7px}
+.ua{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.ua span{font-size:10px;padding:4px 9px;border-radius:4px;font-weight:700;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text)}
+.ua .pr{background:rgba(0,212,170,.08);border-color:var(--cyan);color:var(--cyan)}
+/* Tables */
+.tbl{width:100%;border-collapse:collapse;margin:16px 0;font-size:12px}
+.tbl th{background:var(--s2);color:var(--bright);font-weight:700;text-align:left;padding:10px 14px;border:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.tbl td{padding:9px 14px;border:1px solid var(--border);color:var(--dim);line-height:1.5}
+.tbl tr:nth-child(even) td{background:rgba(255,255,255,.015)}
+.tbl .hi{color:var(--cyan);font-weight:700}
+/* Platform chips */
+.pcg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:24px}
+.pc{background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;transition:.25s}
+.pc:hover{border-color:var(--cyan);background:var(--s2)}
+.pc .pi{font-size:24px;margin-bottom:5px}
+.pc .pn{font-size:11px;font-weight:700;color:var(--bright)}
+.pc .pm{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--cyan);margin-top:3px}
+@media(max-width:900px){.cg3,.cg5,.cg4{grid-template-columns:1fr 1fr}.pnl{padding:20px 16px 40px}.fr{flex-wrap:nowrap}}
+@media(max-width:600px){.cg3,.cg5,.cg4,.cg2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <h1><em>ALICE</em> — System Architecture & Data Flow</h1>
+  <p>Advanced Logic Integrity & Consistency Examiner · Five-Vector Multimodal Behavioral Analysis · Research-Informed Late Fusion</p>
+</div>
+
+<div class="tabs">
+  <button class="tab on" onclick="show('arch')">Architecture</button>
+  <button class="tab" onclick="show('flow')">Data Flow</button>
+  <button class="tab" onclick="show('ux')">User Experience</button>
+  <button class="tab" onclick="show('comp')">Competitive Intel</button>
+</div>
+
+<!-- ========== ARCHITECTURE ========== -->
+<div id="arch" class="pnl on">
+  <div class="ft">Five-Vector Analysis Architecture</div>
+  <div class="fs">Each vector is independently trained and scored. Scores are combined via late fusion (XGBoost + Platt calibration) — not feature concatenation. This architecture follows Li & Abouelenien (2024) who demonstrated late fusion outperforms early fusion for deception detection.</div>
+
+  <div class="sl">Analysis Vectors — Primary</div>
+  <div class="cg cg2" style="margin-bottom:20px">
+    <div class="cd" style="--cc:var(--blue)">
+      <div class="ic">🎭</div>
+      <h3>Facial Action Units</h3>
+      <div class="tc">MediaPipe → Custom ResNet-18 (device) + ME-GraphAU (server)</div>
+      <p>Automated FACS Action Unit detection. Key signals: AU12−AU6 (non-Duchenne/fake smile), AU1+AU4 (cognitive load), AU14 (contempt), bilateral asymmetry (voluntary expression). Pérez-Rosas found this is the #1 contributing modality — removing it dropped accuracy from 77% to 64%.</p>
+      <div class="wt" style="background:rgba(74,144,255,.12);color:var(--blue)">Weight: 0.30</div>
+    </div>
+    <div class="cd" style="--cc:var(--cyan)">
+      <div class="ic">📝</div>
+      <h3>Psycholinguistic Analysis</h3>
+      <div class="tc">spaCy + Empath + NRCLex + VADER + Custom BERT Hedging</div>
+      <p>Eight dimensions: pronoun patterns (I/me drops during deception), hedging frequency, cognitive complexity (clause depth), emotional word distribution, speech disfluencies (um/uh/er), negation frequency, detail specificity (NER density), certainty language. Li & Abouelenien confirmed linguistic is strongest single modality (~80%).</p>
+      <div class="wt" style="background:rgba(0,212,170,.12);color:var(--cyan)">Weight: 0.30</div>
+    </div>
+  </div>
+
+  <div class="sl">Analysis Vectors — Supporting</div>
+  <div class="cg cg3">
+    <div class="cd" style="--cc:var(--amber)">
+      <div class="ic">🔊</div>
+      <h3>Vocal Tonality Flux</h3>
+      <div class="tc">emotion2vec+ large + Praat (parselmouth)</div>
+      <p>768-dim speech emotion embeddings per 1-second window. Praat acoustic features: F0, jitter, shimmer, HNR. Flux = rate of change relative to per-contact baseline, not absolute values.</p>
+      <div class="wt" style="background:rgba(255,179,71,.12);color:var(--amber)">Weight: 0.20</div>
+    </div>
+    <div class="cd" style="--cc:var(--violet)">
+      <div class="ic">🔄</div>
+      <h3>Statement Contradiction</h3>
+      <div class="tc">WhisperX → DeBERTa-v3 NLI + pgvector</div>
+      <p>Speaker-attributed transcription. Each statement embedded, stored in pgvector. New statements compared against top-5 most similar historical statements via DeBERTa NLI (entailment/neutral/contradiction).</p>
+      <div class="wt" style="background:rgba(167,139,250,.12);color:var(--violet)">Weight: 0.15</div>
+    </div>
+    <div class="cd" style="--cc:var(--rose)">
+      <div class="ic">👤</div>
+      <h3>Subject Identification</h3>
+      <div class="tc">LR-ASD + EdgeFace-XS + pyannote (13MB on-device)</div>
+      <p>Active speaker detection (which face is talking, 94.5% mAP). Face re-ID via 512-D embeddings (99.73% LFW). Speaker diarization for audio-only. Gaze subcomponent intentionally low-weight per Luke et al. 2023 expert consensus.</p>
+      <div class="wt" style="background:rgba(244,114,182,.12);color:var(--rose)">Weight: 0.05 (gaze)</div>
+    </div>
+  </div>
+
+  <div class="sl">Ensemble — Late Fusion</div>
+  <div class="cg cg3">
+    <div class="cd" style="--cc:var(--lime)">
+      <div class="ic">🎯</div>
+      <h3>Score-Level Fusion</h3>
+      <div class="tc">XGBoost + Platt Calibration</div>
+      <p>Each vector produces an independent 0-100 score. XGBoost combines scores (NOT features — this is critical). Per-contact Platt scaling calibrates probability. Weights adjust via feature importance after baseline established.</p>
+    </div>
+    <div class="cd" style="--cc:var(--lime)">
+      <div class="ic">📊</div>
+      <h3>SHAP Explainability</h3>
+      <div class="tc">Per-vector contribution breakdown</div>
+      <p>Every score includes SHAP values showing which vector contributed how much. User sees "Elevated: facial expression inconsistency (42%), hedging increase (31%), vocal stress (27%)" — not a black-box number.</p>
+    </div>
+    <div class="cd" style="--cc:var(--lime)">
+      <div class="ic">📈</div>
+      <h3>Baseline Confidence</h3>
+      <div class="tc">Low / Medium / High</div>
+      <p>1 session = Low confidence (self-baseline only). 2-3 sessions = Medium (cross-session patterns emerging). 4+ sessions = High (stable per-contact model). Confidence displayed with EVERY score. ~75% F1 realistic ceiling (DOLOS benchmark).</p>
+    </div>
+  </div>
+
+  <div class="sb"><span>On-Device ML Pipeline (~25MB)</span></div>
+  <div class="cg cg5">
+    <div class="cd" style="--cc:var(--blue)"><h3>MediaPipe</h3><div class="tc">~5MB · Apache 2.0</div><p>478 face landmarks at 30fps. Face detection + alignment.</p></div>
+    <div class="cd" style="--cc:var(--blue)"><h3>Custom AU Model</h3><div class="tc">~3-4MB · INT8 TFLite</div><p>ResNet-18 trained on DISFA+BP4D. 12+ AUs with intensity.</p></div>
+    <div class="cd" style="--cc:var(--rose)"><h3>LR-ASD</h3><div class="tc">~4MB · 0.84M params</div><p>Active speaker detection. 94.5% mAP on AVA-ActiveSpeaker.</p></div>
+    <div class="cd" style="--cc:var(--rose)"><h3>EdgeFace-XS</h3><div class="tc">~7MB · 1.77M params</div><p>Face re-ID. 512-D embeddings. 99.73% LFW accuracy.</p></div>
+    <div class="cd" style="--cc:var(--amber)"><h3>librosa</h3><div class="tc">Code only · ISC</div><p>MFCC, chroma, mel spectrogram, spectral contrast.</p></div>
+  </div>
+
+  <div class="sb"><span>Server ML Pipeline</span></div>
+  <div class="cg cg4">
+    <div class="cd" style="--cc:var(--blue)"><h3>ME-GraphAU</h3><div class="tc">~50MB · GNN</div><p>41 AU categories. Higher accuracy than on-device model for batch analysis.</p></div>
+    <div class="cd" style="--cc:var(--amber)"><h3>emotion2vec+ large</h3><div class="tc">~300MB · MIT</div><p>768-dim speech emotion embeddings. SOTA on IEMOCAP/MELD.</p></div>
+    <div class="cd" style="--cc:var(--cyan)"><h3>spaCy + Empath + NRCLex</h3><div class="tc">~200MB total · MIT</div><p>Full psycholinguistic stack. 200+ lexical categories + 8 emotions.</p></div>
+    <div class="cd" style="--cc:var(--violet)"><h3>WhisperX + DeBERTa</h3><div class="tc">~1.9GB total · BSD-4/MIT</div><p>Speaker-attributed transcription + NLI contradiction scoring.</p></div>
+  </div>
+
+  <div class="sb"><span>Compression Tiers</span></div>
+  <table class="tbl">
+    <tr><th>Tier</th><th>Method</th><th>Bandwidth</th><th>ML Fidelity</th><th>Privacy</th></tr>
+    <tr><td class="hi">1: Lossless Audio</td><td>FLAC 48kHz mono</td><td>~2.5 MB/min</td><td>Perfect — all models receive lossless</td><td>Audio transmitted</td></tr>
+    <tr><td class="hi">2: ROI Video</td><td>Face QP -12 / BG CRF 28-32</td><td>~5-10 MB/min</td><td>Near-lossless face (SSIM >0.98)</td><td>Video transmitted</td></tr>
+    <tr><td class="hi">3: Edge-First</td><td>On-device AU + landmarks + embeddings</td><td>~0.07 + 2.5 FLAC</td><td>High (AU data > raw video for analysis)</td><td>Raw video never leaves device</td></tr>
+  </table>
+  <div class="co" style="--coc:var(--cyan)"><h5>Adaptive Selection</h5><p>≥10 Mbps → RAW (full video + FLAC). 5-10 Mbps → ROI_ENCODED (face-preserved video + FLAC). 1-5 Mbps → EDGE_FULL (AU + landmarks + features + FLAC). &lt;1 Mbps → EDGE_MINIMAL (AU + landmarks only, no transcription).</p></div>
+</div>
+
+<!-- ========== DATA FLOW ========== -->
+<div id="flow" class="pnl">
+  <div class="ft">Data Flow — Upload & Video Call Pipelines</div>
+  <div class="fs">Both paths converge on the same five-vector analysis pipeline. The video call path has two sub-paths: real-time streaming (Path A) and post-call recording download (Path B).</div>
+
+  <div class="sb"><span>File Upload Pipeline</span></div>
+
+  <div style="margin-bottom:12px"><div class="sl">Client → Ingestion</div></div>
+  <div class="fr">
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">📱</div><div class="nl">File Picker</div><div class="ns">SAF / PHPicker</div><div class="np">Select MP4/MOV/WebM from device, camera roll, or cloud storage. Max 2GB / 4hr.</div></div>
+    <div class="ar" style="--ac:var(--cyan)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">✅</div><div class="nl">Validate + Compress</div><div class="ns">MediaCodec H.265 + FLAC</div><div class="np">Type/size check. On-device H.265 re-encode if needed. FLAC audio extraction begins immediately. ROI encoding if bandwidth allows.</div></div>
+    <div class="ar" style="--ac:var(--cyan)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--blue)"><div class="ni">📤</div><div class="nl">Chunked Upload</div><div class="ns">TUS Protocol / Resumable</div><div class="np">5MB chunks. SHA-256 checksum. Auto-retry on failure. Progress via WebSocket.</div></div>
+    <div class="ar" style="--ac:var(--blue)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--blue)"><div class="ni">🚪</div><div class="nl">API Gateway</div><div class="ns">FastAPI POST /uploads/video</div><div class="np">JWT auth. Rate limit (5/hr). Chunk reassembly. Integrity check. Assigns job_id. Stores in MinIO.</div></div>
+  </div>
+
+  <div style="margin-bottom:12px"><div class="sl">Extraction (Parallel)</div></div>
+  <div class="fr">
+    <div class="nd" style="--nc:var(--violet)"><div class="ni">🎬</div><div class="nl">FFmpeg Demux</div><div class="ns">Separate A/V streams</div><div class="np">PCM audio (48kHz mono) for ML. FLAC for storage. Video frames for AU extraction.</div></div>
+    <div class="ar" style="--ac:var(--violet)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="pg">
+      <div class="pl">PARALLEL — 5 PIPELINES</div>
+      <div class="nd" style="--nc:var(--blue)"><div class="nl">🎭 AU Extraction</div><div class="ns">ME-GraphAU (server)</div><div class="np">41 AU categories per frame + bilateral asymmetry post-processing. Intensity 0-5 FACS scale.</div></div>
+      <div class="nd" style="--nc:var(--cyan)"><div class="nl">📝 Transcription + Psycholing.</div><div class="ns">WhisperX → spaCy + Empath + NRCLex</div><div class="np">Speaker-attributed transcripts. 8 psycholinguistic dimensions extracted per statement.</div></div>
+      <div class="nd" style="--nc:var(--amber)"><div class="nl">🔊 Tonality Extraction</div><div class="ns">emotion2vec+ large + Praat</div><div class="np">768-dim embeddings per 1s window. F0/jitter/shimmer/HNR per window. Cosine flux between consecutive windows.</div></div>
+      <div class="nd" style="--nc:var(--violet)"><div class="nl">🔄 Contradiction Check</div><div class="ns">DeBERTa-v3 NLI + pgvector</div><div class="np">Each statement embedded → top-5 similar history retrieved → NLI classification (entail/neutral/contradict).</div></div>
+      <div class="nd" style="--nc:var(--rose)"><div class="nl">👤 Subject ID</div><div class="ns">Face embedding + diarization</div><div class="np">Match face to speaker. Link to existing contact profile or create new. Update baseline statistics.</div></div>
+    </div>
+    <div class="ar" style="--ac:var(--lime)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--lime)"><div class="ni">🎯</div><div class="nl">Late Fusion Scorer</div><div class="ns">XGBoost + Platt + SHAP</div><div class="np">5 independent scores → weighted ensemble → calibrated 0-100 probability → per-vector SHAP explanation → confidence level.</div></div>
+    <div class="ar" style="--ac:var(--lime)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">📊</div><div class="nl">Report</div><div class="ns">PostgreSQL + WebSocket push</div><div class="np">Timestamped report. Per-statement scores. Vector breakdown. Contradiction matches. Baseline update.</div></div>
+  </div>
+
+  <div class="sb"><span>Video Call Pipeline</span></div>
+
+  <div class="pcg">
+    <div class="pc"><div class="pi">🟦</div><div class="pn">Zoom</div><div class="pm">Meeting SDK + Webhooks</div></div>
+    <div class="pc"><div class="pi">🟣</div><div class="pn">Teams</div><div class="pm">Graph API + Bot</div></div>
+    <div class="pc"><div class="pi">🟢</div><div class="pn">Google Meet</div><div class="pm">REST API + Add-ons</div></div>
+    <div class="pc"><div class="pi">🔵</div><div class="pn">Webex</div><div class="pm">Meetings API</div></div>
+    <div class="pc"><div class="pi">🟡</div><div class="pn">Slack</div><div class="pm">Events API (audio)</div></div>
+    <div class="pc"><div class="pi">🔴</div><div class="pn">LiveKit</div><div class="pm">Direct WebRTC</div></div>
+  </div>
+
+  <div style="margin-bottom:12px"><div class="sl">Authorization & Consent</div></div>
+  <div class="fr">
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">🔗</div><div class="nl">OAuth2 Connect</div><div class="ns">Platform-specific</div><div class="np">User authorizes ALICE. Scopes: meetings, recordings, bot join. Refresh tokens in Vault.</div></div>
+    <div class="ar" style="--ac:var(--cyan)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">📋</div><div class="nl">Meeting Detected</div><div class="ns">Webhook / calendar sync</div><div class="np">Platform fires event on meeting start. Or user triggers manually from app.</div></div>
+    <div class="ar" style="--ac:var(--red)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--red);border-color:var(--red)"><div class="ni">⚠️</div><div class="nl">Dual Consent Gate</div><div class="ns">REQUIRED — Both parties</div><div class="np">Both participants must consent via signed JWT. Non-ALICE users get web consent link. Recording blocked until both verified. Either can revoke → immediate stop.</div></div>
+    <div class="ar" style="--ac:var(--cyan)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">✅</div><div class="nl">Analysis Enabled</div><div class="ns">Media pipeline activated</div><div class="np">Consent verified. Platform connector starts. Subject ID pipeline identifies participants. Analysis begins.</div></div>
+  </div>
+
+  <div style="margin-bottom:12px"><div class="sl">Media Acquisition — Two Paths</div></div>
+  <div class="fr">
+    <div class="pg" style="min-width:220px">
+      <div class="pl">PATH A — REAL-TIME STREAM</div>
+      <div class="nd" style="--nc:var(--blue)"><div class="nl">🎥 Bot Joins Meeting</div><div class="ns">Silent observer via SDK</div><div class="np">Receives raw media. For Zoom/Teams: per-participant audio streams = perfect diarization without model.</div></div>
+      <div class="nd" style="--nc:var(--blue)"><div class="nl">📡 Live Analysis</div><div class="ns">Lightweight models for speed</div><div class="np">On-device AU + librosa features for real-time scoring. Whisper distil for live transcription. Scores pushed via WebSocket ~2-3s latency.</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:50px;flex-shrink:0">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);writing-mode:vertical-rl;letter-spacing:2px">OR</span>
+    </div>
+    <div class="pg" style="min-width:220px">
+      <div class="pl">PATH B — POST-CALL RECORDING</div>
+      <div class="nd" style="--nc:var(--amber)"><div class="nl">☁️ Recording Webhook</div><div class="ns">Platform posts recording URL</div><div class="np">Zoom: recording.completed. Teams: Graph API. Meet: Drive API. Worker downloads to MinIO.</div></div>
+      <div class="nd" style="--nc:var(--amber)"><div class="nl">⬇️ Batch Processing</div><div class="ns">Full-accuracy pipeline</div><div class="np">Same extraction pipeline as file upload. Full ME-GraphAU, emotion2vec large, Whisper large-v3. Higher accuracy than real-time.</div></div>
+    </div>
+    <div class="ar" style="--ac:var(--lime)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--lime)"><div class="ni">🔀</div><div class="nl">Unified Output</div><div class="ns">Same schema both paths</div><div class="np">Both paths produce identical AnalysisReport. Real-time scores get replaced by enhanced scores post-call. User notified.</div></div>
+  </div>
+
+  <div style="margin-bottom:12px"><div class="sl">Post-Call Enhancement</div></div>
+  <div class="fr">
+    <div class="nd" style="--nc:var(--violet)"><div class="ni">🔄</div><div class="nl">Full Re-Analysis</div><div class="ns">emotion2vec large + full AU + Whisper large-v3</div><div class="np">After call ends, run full-accuracy pipeline on complete recording. Produces higher-fidelity scores than real-time.</div></div>
+    <div class="ar" style="--ac:var(--violet)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--violet)"><div class="ni">📈</div><div class="nl">Baseline Update</div><div class="ns">Per-contact EMA refresh</div><div class="np">Update AU baseline, tonality baseline (F0 range, rate), linguistic profile (hedging freq, pronoun ratio, vocabulary). Exponential moving average.</div></div>
+    <div class="ar" style="--ac:var(--violet)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--violet)"><div class="ni">🧠</div><div class="nl">Adapter Retrain</div><div class="ns">Every 3rd call</div><div class="np">XGBoost scorer retrained with all historical features for this contact. ~$0.15/retrain. Version new adapter in MinIO.</div></div>
+    <div class="ar" style="--ac:var(--cyan)"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg></div>
+    <div class="nd" style="--nc:var(--cyan)"><div class="ni">📊</div><div class="nl">Enhanced Report</div><div class="ns">Replaces live scores</div><div class="np">Final report with full-accuracy scores. Shows delta from live → enhanced. Push notification to user.</div></div>
+  </div>
+
+  <div class="sb"><span>Storage Lifecycle</span></div>
+  <div class="fr">
+    <div class="nd" style="--nc:var(--red)"><div class="ni">🔥</div><div class="nl">Hot (0-30d)</div><div class="ns">SSD — Full Payload</div><div class="np">AV1 video + FLAC + AU data + landmarks + transcript + scores. ~$1.15/user/mo.</div></div>
+    <div class="ar" style="--ac:var(--rose);position:relative"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg><span class="lb">30 DAYS</span></div>
+    <div class="nd" style="--nc:var(--amber)"><div class="ni">♨️</div><div class="nl">Warm (30-90d)</div><div class="ns">HDD — No Video</div><div class="np">FLAC + AU data + transcript + scores. Video deleted. ~$0.22/user/mo.</div></div>
+    <div class="ar" style="--ac:var(--rose);position:relative"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg><span class="lb">90 DAYS</span></div>
+    <div class="nd" style="--nc:var(--blue)"><div class="ni">❄️</div><div class="nl">Cold (90-365d)</div><div class="ns">Archive — Scores Only</div><div class="np">Transcript + scores + statement embeddings. ~$0.04/user/mo.</div></div>
+    <div class="ar" style="--ac:var(--rose);position:relative"><svg viewBox="0 0 24 24"><line class="al" x1="2" y1="12" x2="18" y2="12"/><polygon class="ah" points="17,8 24,12 17,16"/></svg><span class="lb">365 DAYS</span></div>
+    <div class="nd" style="--nc:var(--dim)"><div class="ni">🗑️</div><div class="nl">Purge</div><div class="ns">GDPR/BIPA Compliant</div><div class="np">All PII deleted. Anonymized aggregate only with consent.</div></div>
+  </div>
+</div>
+
+<!-- ========== UX FLOW ========== -->
+<div id="ux" class="pnl">
+  <div class="ft">User Experience Flow</div>
+  <div class="fs">From first install through platform connection, live analysis, and report review. Covers both the "analyzer" (ALICE user) and the "subject" (other call participant).</div>
+
+  <div class="sb"><span>Onboarding</span></div>
+  <div class="ut">
+    <div class="us" style="--sc:var(--cyan)"><div class="sd">📲</div><div class="sn">1</div><div class="uc"><h4>Install & Register</h4><div class="scl">Welcome / Sign Up</div><p>Download from Play Store. Three paths: Email+Password (Argon2id, 12+ chars, breach check), Google SSO, Microsoft SSO. MFA (TOTP or Passkey) prompted immediately.</p><div class="ua"><span class="pr">Create Account</span><span>Google SSO</span><span>Microsoft SSO</span></div></div></div>
+    <div class="us" style="--sc:var(--cyan)"><div class="sd">🔗</div><div class="sn">2</div><div class="uc"><h4>Connect Platforms</h4><div class="scl">Platform OAuth</div><p>Connect video call platforms. Each launches OAuth in browser. Multiple can be connected. Skip available for upload-only mode.</p><div class="ua"><span class="pr">Connect Zoom</span><span>Connect Teams</span><span>Connect Meet</span><span>Skip for Now</span></div></div></div>
+    <div class="us" style="--sc:var(--blue)"><div class="sd">🏠</div><div class="sn">3</div><div class="uc"><h4>Dashboard</h4><div class="scl">Main Hub</div><p>Recent analyses, upcoming meetings (calendar sync), contacts with baseline quality indicators, quick actions. Cards: "Next: 2PM Zoom with Sarah — Analysis Ready" / "Recent: Mark — Score 34/100 (Low Concern, Medium Confidence)".</p><div class="ua"><span class="pr">Start Native Call</span><span class="pr">Upload Video</span><span>Contacts</span><span>Settings</span></div></div></div>
+  </div>
+
+  <div class="sb"><span>Video Call Path</span></div>
+  <div class="ut">
+    <div class="us" style="--sc:var(--amber)"><div class="sd">📅</div><div class="sn">4a</div><div class="uc"><h4>Meeting Trigger</h4><div class="scl">Auto-Detect or Manual</div><p>Auto: ALICE detects meeting via webhook, sends push: "Zoom call starting. Enable analysis?" Manual: User taps "Start Native Call." Subject identification runs immediately to match faces to contacts.</p><div class="ua"><span class="pr">Enable Analysis</span><span>Skip This Meeting</span><span>Always Analyze</span></div></div></div>
+    <div class="us" style="--sc:var(--red)"><div class="sd">⚠️</div><div class="sn">5a</div><div class="uc"><h4>Dual Consent</h4><div class="scl">REQUIRED — Both Parties</div><p><strong>Both have ALICE:</strong> In-app consent modal on both devices. <strong>Other party doesn't have ALICE:</strong> SMS/email with web consent form (time-bound to this meeting). Either party declines → call continues, zero analysis. Either party revokes mid-call → immediate analysis stop.</p><div class="ua"><span class="pr">I Consent</span><span>Decline</span><span>Learn More</span></div></div></div>
+    <div class="us" style="--sc:var(--amber)"><div class="sd">🎥</div><div class="sn">6a</div><div class="uc"><h4>Live Call + Real-Time Scoring</h4><div class="scl">Companion Overlay</div><p>Subtle floating widget (not visible to other participant). Shows: rolling composite score gauge, 5 mini vector indicators (AU/psycholing/tonality/contradiction/ID), live transcript with flagged statements, confidence level badge. Subject identity confirmed with name/contact photo.</p><div class="ua"><span>Minimize</span><span>Expand</span><span class="pr">Flag Moment</span><span>Revoke Consent</span></div></div></div>
+    <div class="us" style="--sc:var(--violet)"><div class="sd">📊</div><div class="sn">7a</div><div class="uc"><h4>Post-Call Enhanced Report</h4><div class="scl">Full Analysis (3-5 min after call)</div><p><strong>Summary:</strong> Overall score, 5-vector breakdown with SHAP contributions, confidence level. <strong>Timeline:</strong> Scrubable, synced with transcript. Tap statement → see AU activations, tonality waveform, contradictions. <strong>Trends:</strong> Score history across sessions with this contact. "Baseline: Strong (5 calls)" vs "2 more calls needed."</p><div class="ua"><span class="pr">View Timeline</span><span>Share Report (encrypted)</span><span>Export Transcript</span><span>Delete Recording</span></div></div></div>
+  </div>
+
+  <div class="sb"><span>File Upload Path</span></div>
+  <div class="ut">
+    <div class="us" style="--sc:var(--rose)"><div class="sd">📄</div><div class="sn">4b</div><div class="uc"><h4>Upload Video</h4><div class="scl">File Selection + Contact Assignment</div><p>File picker: device, Google Drive, iCloud, Dropbox. MP4/MOV/WebM/MKV ≤2GB/4hr. User assigns video to contact (existing or new) — required for baseline tracking. Subject ID pipeline will match faces automatically.</p><div class="ua"><span class="pr">Select from Device</span><span>Cloud Storage</span><span>Record Now</span></div></div></div>
+    <div class="us" style="--sc:var(--rose)"><div class="sd">⬆️</div><div class="sn">5b</div><div class="uc"><h4>Upload + Consent Attestation</h4><div class="scl">Progress + Legal Checkbox</div><p>Progress bar with resume capability. Required attestation: "I attest that all individuals consented to recording and I have legal right to submit this for analysis." Logged with timestamp + user ID.</p><div class="ua"><span class="pr">☑ I Attest & Upload</span><span>Cancel</span></div></div></div>
+    <div class="us" style="--sc:var(--rose)"><div class="sd">⏳</div><div class="sn">6b</div><div class="uc"><h4>Processing</h4><div class="scl">Real-Time Status Updates</div><p>WebSocket updates: "Uploading… 78%" → "Extracting audio…" → "Identifying speakers…" → "Analyzing facial expressions…" → "Psycholinguistic profiling…" → "Checking vocal patterns…" → "Statement consistency check…" → "Scoring…" → "✅ Complete." User can leave — push notification when done.</p></div></div>
+    <div class="us" style="--sc:var(--violet)"><div class="sd">📊</div><div class="sn">7b</div><div class="uc"><h4>Analysis Report</h4><div class="scl">Same Format as 7a</div><p>Identical report: summary, timeline, per-statement scores, vector breakdown, contradiction matches, trends. Upload reports show full-accuracy scores immediately (no live→enhanced upgrade step).</p><div class="ua"><span class="pr">View Timeline</span><span>Share Report</span><span>Re-Analyze with Updated Baseline</span></div></div></div>
+  </div>
+</div>
+
+<!-- ========== COMPETITIVE ========== -->
+<div id="comp" class="pnl">
+  <div class="ft">Competitive Intelligence</div>
+  <div class="fs">The deception detection market is fragmented — each competitor captures one slice. ALICE is the first to fuse all modalities with per-subject baselines and live call integration.</div>
+
+  <div class="sb"><span>Market Landscape</span></div>
+  <table class="tbl">
+    <tr><th>System</th><th>Approach</th><th>Modalities</th><th>Per-Subject Baseline</th><th>Real-Time</th><th>Call Integration</th><th>Accuracy</th></tr>
+    <tr><td class="hi">CyberQ.ai</td><td>LLM prompt engineering on Azure OpenAI (Houston Deception Methodology)</td><td>Text only</td><td>No</td><td>No (upload transcript)</td><td>No</td><td>92% (unvalidated, no paper)</td></tr>
+    <tr><td class="hi">Converus EyeDetect</td><td>Pupillary dilation + eye tracking via device</td><td>Eye only</td><td>No</td><td>Semi (requires hardware)</td><td>No</td><td>86-90% (proprietary study)</td></tr>
+    <tr><td class="hi">Clearspeed</td><td>Voice risk analysis (raised $60M June 2025)</td><td>Audio only</td><td>Unclear</td><td>Yes</td><td>No</td><td>Undisclosed</td></tr>
+    <tr><td class="hi">Arche AI</td><td>Audio behavioral analysis</td><td>Audio only</td><td>Unclear</td><td>Unclear</td><td>No</td><td>Undisclosed</td></tr>
+    <tr><td class="hi">Deceptio.AI</td><td>Text analysis</td><td>Text only</td><td>No</td><td>No</td><td>No</td><td>Beta stage</td></tr>
+    <tr style="background:rgba(0,212,170,.06)"><td style="color:var(--cyan);font-weight:800">ALICE</td><td>5-vector multimodal late fusion with per-subject calibration</td><td style="color:var(--cyan)">Visual + Audio + Text</td><td style="color:var(--cyan)">Yes</td><td style="color:var(--cyan)">Yes</td><td style="color:var(--cyan)">Zoom/Teams/Meet/Webex/Slack</td><td>Targeting ~75% F1 (honest)</td></tr>
+  </table>
+
+  <div class="sb"><span>CyberQ.ai — Deep Dive</span></div>
+  <div class="cg cg2">
+    <div class="cd" style="--cc:var(--red)">
+      <h3>What CyberQ Does</h3>
+      <p>Core product "Q" analyzes uploaded text transcripts using proprietary prompt encoding the Houston Deception Detection Methodology (co-founder Phil Houston, 25-year CIA career). Flags statements as deceptive, truthful, or needing follow-up. Built on Azure OpenAI. Claims 92% accuracy — never published in any peer-reviewed venue. Training on "hundreds of validated examples" (tiny by ML standards).</p>
+    </div>
+    <div class="cd" style="--cc:var(--cyan)">
+      <h3>ALICE's Advantages Over CyberQ</h3>
+      <p><strong>Multimodal:</strong> CyberQ ignores facial expressions, voice, and body language entirely. <strong>Per-subject:</strong> Houston's methodology applies population-level heuristics — higher false positives for neurodivergent, non-native speakers, cultural minorities. <strong>Real-time:</strong> Q requires uploading completed transcripts. <strong>Integration:</strong> No video call plugins. <strong>Validation:</strong> Zero papers, zero patents vs. ALICE's research-backed architecture. <strong>Risk:</strong> LLM dependency on model they don't control.</p>
+    </div>
+  </div>
+
+  <div class="sb"><span>Research Benchmarks</span></div>
+  <div class="co" style="--coc:var(--amber)">
+    <h5>Accuracy Reality Check</h5>
+    <p>Best published result on DOLOS (1,675 clips, most realistic benchmark): <strong>75.5% F1</strong> (Vallabhaneni 2025). Best on Pérez-Rosas trial data (121 videos): 75-82% with SVM fusion. The SVC 2025 Challenge confirmed cross-domain generalization is the central unsolved problem — models trained on one dataset fail on others. <strong>Any claim of >90% accuracy on a realistic dataset should be treated with extreme skepticism.</strong> ALICE targets ~75% F1 and is transparent about this.</p>
+  </div>
+
+  <div class="sb"><span>Available Evaluation Datasets</span></div>
+  <table class="tbl">
+    <tr><th>Dataset</th><th>Size</th><th>Type</th><th>Modalities</th><th>Access</th></tr>
+    <tr><td>Real-life Trial (Pérez-Rosas)</td><td>121 videos</td><td>High-stakes real</td><td>Audio/Video/Text</td><td>Request from authors</td></tr>
+    <tr><td>DOLOS</td><td>1,675 clips</td><td>Low-stakes game</td><td>Audio/Video/Rich annotations</td><td>Public</td></tr>
+    <tr><td>MU3D</td><td>320 videos</td><td>Controlled</td><td>Audio/Video/Text</td><td>Academic request</td></tr>
+    <tr><td>Bag-of-Lies</td><td>325 samples</td><td>Casual</td><td>Audio/Video/EEG/Gaze</td><td>Public</td></tr>
+    <tr><td>Box of Lies</td><td>Game segments</td><td>Entertainment</td><td>Audio/Video/Text</td><td>Public</td></tr>
+  </table>
+</div>
+
+<script>
+function show(id){
+  document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  event.currentTarget.classList.add('on');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+[project]
+name = "project-alice"
+version = "0.1.0"
+description = "Project ALICE -- Advanced Logic Integrity & Consistency Examiner. Multimodal behavioral anomaly detection for video calls and uploaded recordings."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+
+dependencies = [
+    "ffmpeg-python",
+    "mediapipe",
+    "librosa",
+    "opencv-python-headless",
+    "soundfile",
+    "numpy",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+# Tooling required by CLAUDE.md @reviewer agent (ruff + black + mypy --strict
+# + pytest at 80% / 90% coverage). Install with: pip install -e ".[dev]"
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "black",
+    "mypy",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Source lives under backend/ as a PEP 420 namespace package layout (no
+# __init__.py files yet). namespaces = true is required for setuptools
+# discovery to pick those up; remove if explicit __init__.py files are
+# added project-wide.
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*"]
+namespaces = true

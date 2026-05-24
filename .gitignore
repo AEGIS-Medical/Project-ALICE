@@ -1,0 +1,73 @@
+# ---- Python ------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+*.egg
+dist/
+build/
+pip-wheel-metadata/
+
+# ---- Virtual environments ---------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Editor / IDE -----------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Claude Code session state ----------------------------------------
+# Local session caches, hooks, agent transcripts. Project-level shared
+# settings (.claude/settings.json, agent definitions) can be added back
+# with a more selective rule if/when desired.
+.claude/
+
+# ---- ALICE pipeline outputs -------------------------------------------
+# Generated artifacts from compression / analysis runs.
+processed_output/
+
+# ---- Demo / test media (binary, often large) --------------------------
+# We keep the directory structure but not the videos themselves.
+# Drop your own test clips into demo_data/<category>/ — they stay local.
+demo_data/**/*.mp4
+demo_data/**/*.mov
+demo_data/**/*.mkv
+demo_data/**/*.webm
+demo_data/**/*.avi
+demo_data/**/*.flac
+demo_data/**/*.wav
+demo_data/**/*.opus
+
+# ---- ML model files (downloaded lazily, not vendored) -----------------
+*.tflite
+*.task
+*.onnx
+*.pt
+*.pth
+*.bin
+
+# ---- Secrets / env ----------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ---- OS-specific ------------------------------------------------------
+desktop.ini
