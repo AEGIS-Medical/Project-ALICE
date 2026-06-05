@@ -11,15 +11,23 @@ a given machine. Subsequent runs hit the cache and never touch the
 network.
 
 The cache location is, in priority order:
-    1. ``ALICE_MODEL_CACHE`` env var, if set.
+    1. ``ALICE_MODEL_CACHE`` env var, if set (CI, Android, custom deploy).
     2. Windows: ``%LOCALAPPDATA%/project-alice/models``.
-    3. POSIX-ish: ``~/.cache/project-alice/models``.
+    3. Android (Termux / KMP bridge sets ``XDG_DATA_HOME`` to
+       ``Context.filesDir``): ``$XDG_DATA_HOME/project-alice/models``.
+    4. macOS / Linux XDG standard: ``~/.local/share/project-alice/models``.
+
+P1-S7: the previous implementation resolved only ``%LOCALAPPDATA%``, which is
+undefined on Android, Linux, and macOS -- the pipeline crashed on first use
+off-Windows. The chain below resolves on every platform the KMP mobile client
+bridges to.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import sys
 import urllib.request
 from pathlib import Path
 
@@ -42,14 +50,22 @@ _MODEL_URLS: dict[str, str] = {
 
 
 def _cache_dir() -> Path:
-    """Return the directory we should cache model files in."""
+    """Return the platform-appropriate model cache directory.
+
+    Resolution order (first match wins): ``ALICE_MODEL_CACHE`` override ->
+    Windows ``%LOCALAPPDATA%`` -> Android ``$XDG_DATA_HOME`` -> XDG fallback
+    under the home directory. See module docstring for the rationale.
+    """
     override = os.environ.get("ALICE_MODEL_CACHE")
     if override:
         return Path(override)
-    if os.name == "nt":
+    if sys.platform == "win32":
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
         return base / "project-alice" / "models"
-    return Path.home() / ".cache" / "project-alice" / "models"
+    xdg = os.environ.get("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / "project-alice" / "models"
+    return Path.home() / ".local" / "share" / "project-alice" / "models"
 
 
 def ensure_model(name: str) -> Path:

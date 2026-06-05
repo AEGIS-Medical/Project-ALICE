@@ -150,7 +150,7 @@ def _build_rows(
         ("ROI Video",      status_or_size("roi_video",      result.roi_video_size_bytes),
                            status_or_ratio("roi_video",     ratios.get("video")),
                            status_or_time("roi_video",      times.get("roi_encode"))),
-        ("Landmarks JSON", status_or_size("landmarks",      result.landmarks_size_bytes),
+        ("Landmarks JSONL", status_or_size("landmarks",      result.landmarks_size_bytes),
                            "",
                            status_or_time("landmarks",      times.get("landmarks_extract"))),
         ("Audio Features", status_or_size("audio_features", result.features_size_bytes),

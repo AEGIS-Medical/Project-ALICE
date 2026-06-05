@@ -4,8 +4,9 @@ Two distinct extractors live here. Both produce artifacts that downstream
 analyzers consume directly -- nothing in the pipeline re-encodes them:
 
   * :meth:`FeatureExtractor.extract_landmarks`
-        MediaPipe Face Mesh -> per-frame JSON of 478 (x, y, z) landmarks.
-        Consumed by the AU detector and the gaze sub-vector.
+        MediaPipe Face Mesh -> streaming JSON Lines (``.jsonl``) of 478
+        (x, y, z) landmarks per frame, flushed incrementally so peak RAM is
+        bounded. Consumed by the AU detector and the gaze sub-vector.
   * :meth:`FeatureExtractor.extract_audio_features`
         librosa MFCC / Chroma / Mel / Spectral-Contrast / Tonnetz, windowed
         at 1.0 s with 0.5 s stride by default. Consumed by the vocal tonality
@@ -67,6 +68,10 @@ class FeatureExtractor:
             frame (the default and what AU analysis wants). Higher values
             trade temporal resolution for speed; raise only when wall-clock
             matters more than microexpression timing.
+        flush_interval: Flush the streaming landmark writer to disk every N
+            emitted frames (default 30 = ~1 s at 30 fps). Bounds peak RAM to
+            O(flush_interval) instead of O(total_frames) and guarantees a
+            readable partial file if the process is killed mid-call.
     """
 
     # ---- Audio feature dimensions (matched to spec) ----------------------
@@ -84,12 +89,17 @@ class FeatureExtractor:
     MEDIAPIPE_MIN_TRACKING_CONFIDENCE: float = 0.5
     MEDIAPIPE_MAX_FACES: int = 1
 
-    def __init__(self, frame_skip: int = 1) -> None:
+    def __init__(self, frame_skip: int = 1, flush_interval: int = 30) -> None:
         if frame_skip < 1:
             raise ValueError(
                 f"frame_skip must be >= 1 (got {frame_skip}); use 1 to process every frame."
             )
+        if flush_interval < 1:
+            raise ValueError(
+                f"flush_interval must be >= 1 (got {flush_interval})."
+            )
         self.frame_skip: int = frame_skip
+        self.flush_interval: int = flush_interval
 
         # Telemetry from the most recent extraction call. Reset on each call.
         self.last_frames_processed: int = 0
@@ -105,35 +115,41 @@ class FeatureExtractor:
         self,
         video_path: Path,
         output_dir: Path,
+        flush_interval: int | None = None,
     ) -> Path:
-        """Extract 478-point Face Mesh landmarks per frame to a JSON file.
+        """Stream 478-point Face Mesh landmarks per frame to a JSON Lines file.
 
-        ``refine_landmarks=True`` is set so we get the full 478-point mesh
-        (468 face + 10 iris). Without it MediaPipe returns 468 only.
+        Each frame's record is serialised and written immediately (one JSON
+        object per line), and the writer is flushed to disk every
+        ``flush_interval`` emitted frames. This keeps peak RAM at
+        O(flush_interval) rather than O(total_frames) -- a 60-minute call at
+        30 fps would otherwise accumulate ~600 MB of dicts and get OOM-killed
+        on Android -- and guarantees a readable partial file if the process is
+        interrupted mid-call.
 
-        Frames where no face is detected are still emitted in the output
-        with ``"landmarks": null`` so downstream analyzers can align by
+        ``refine_landmarks`` is implied by the model bundle so we get the full
+        478-point mesh (468 face + 10 iris).
+
+        Frames where no face is detected are still emitted with
+        ``"landmarks": null`` so downstream analyzers can align by
         ``frame_number`` without re-deriving the timeline.
 
         Args:
             video_path: Source video. Must be a video container (audio-only
                 inputs are rejected).
             output_dir: Destination. Created if missing.
+            flush_interval: Override the instance-level flush cadence for this
+                call. ``None`` (default) uses ``self.flush_interval``.
 
         Returns:
-            Path to the JSON file:
-            ``{output_dir}/{stem}_landmarks.json``.
+            Path to the JSON Lines file:
+            ``{output_dir}/{stem}_landmarks.jsonl``.
 
-            JSON schema::
+            Each line is one independently-parseable object::
 
-                [
-                  {
-                    "frame_number": int,
-                    "timestamp_seconds": float,
-                    "landmarks": [[x, y, z], ...]   // 478 entries, or null
-                  },
-                  ...
-                ]
+                {"frame_number": int,
+                 "timestamp_seconds": float,
+                 "landmarks": [[x, y, z], ...]}   // 478 entries, or null
 
             Coordinates are normalized in ``[0, 1]`` for x/y; z is the
             depth value MediaPipe reports (negative = closer to camera).
@@ -145,6 +161,9 @@ class FeatureExtractor:
         """
         video_path = Path(video_path)
         output_dir = Path(output_dir)
+        interval = self.flush_interval if flush_interval is None else flush_interval
+        if interval < 1:
+            raise ValueError(f"flush_interval must be >= 1 (got {interval}).")
         self._validate_video_input(video_path)
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -158,7 +177,6 @@ class FeatureExtractor:
         # back to 30 fps so timestamps remain monotonic and roughly correct.
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
-        records: list[dict] = []
         frames_processed = 0
         frames_with_face = 0
         frame_idx = 0
@@ -180,42 +198,47 @@ class FeatureExtractor:
         )
         # Tasks API objects use explicit close(), not a context manager.
         landmarker = vision.FaceLandmarker.create_from_options(options)
+        output_path = output_dir / f"{video_path.stem}_landmarks.jsonl"
+        # The file context wraps the whole decode loop so an interruption
+        # (exception / kill) still leaves a flushed, well-formed partial file:
+        # closing the handle flushes any tail buffer past the last interval.
         try:
-            while True:
-                ok, frame = cap.read()
-                if not ok:
-                    break
-                if frame_idx % self.frame_skip == 0:
-                    # MediaPipe expects RGB; cv2 reads BGR.
-                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                    # detect_for_video requires monotonically increasing
-                    # timestamps in ms; derive from the source frame index.
-                    timestamp_ms = int((frame_idx / fps) * 1000)
-                    result = landmarker.detect_for_video(mp_image, timestamp_ms)
+            with open(output_path, "w", encoding="utf-8") as fh:
+                while True:
+                    ok, frame = cap.read()
+                    if not ok:
+                        break
+                    if frame_idx % self.frame_skip == 0:
+                        # MediaPipe expects RGB; cv2 reads BGR.
+                        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                        # detect_for_video requires monotonically increasing
+                        # timestamps in ms; derive from the source frame index.
+                        timestamp_ms = int((frame_idx / fps) * 1000)
+                        result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
-                    landmarks: list[list[float]] | None = None
-                    if result.face_landmarks:
-                        # face_landmarks is a list-of-lists; one inner list
-                        # per detected face. We pin num_faces=1, so [0] is safe.
-                        mesh = result.face_landmarks[0]
-                        landmarks = [[lm.x, lm.y, lm.z] for lm in mesh]
-                        frames_with_face += 1
+                        landmarks: list[list[float]] | None = None
+                        if result.face_landmarks:
+                            # face_landmarks is a list-of-lists; one inner list
+                            # per detected face. We pin num_faces=1, so [0] is safe.
+                            mesh = result.face_landmarks[0]
+                            landmarks = [[lm.x, lm.y, lm.z] for lm in mesh]
+                            frames_with_face += 1
 
-                    records.append({
-                        "frame_number": frame_idx,
-                        "timestamp_seconds": frame_idx / fps,
-                        "landmarks": landmarks,
-                    })
-                    frames_processed += 1
-                frame_idx += 1
+                        record = {
+                            "frame_number": frame_idx,
+                            "timestamp_seconds": frame_idx / fps,
+                            "landmarks": landmarks,
+                        }
+                        fh.write(json.dumps(record))
+                        fh.write("\n")
+                        frames_processed += 1
+                        if frames_processed % interval == 0:
+                            fh.flush()
+                    frame_idx += 1
         finally:
             landmarker.close()
             cap.release()
-
-        output_path = output_dir / f"{video_path.stem}_landmarks.json"
-        with output_path.open("w", encoding="utf-8") as fh:
-            json.dump(records, fh)
 
         self.last_frames_processed = frames_processed
         self.last_frames_with_face = frames_with_face

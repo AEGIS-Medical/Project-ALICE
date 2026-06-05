@@ -29,7 +29,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from backend.shared.schemas.media import (
     CompressionConfig,
@@ -96,6 +96,9 @@ class CompressionPipeline:
         audio_extractor: Optional[AudioExtractor] = None,
         roi_encoder: Optional[ROIEncoder] = None,
         feature_extractor: Optional[FeatureExtractor] = None,
+        on_mode_change: Optional[
+            Callable[[CompressionMode, CompressionMode], None]
+        ] = None,
     ) -> None:
         self.config: CompressionConfig = config or CompressionConfig()
         self.audio_extractor: AudioExtractor = (
@@ -105,6 +108,57 @@ class CompressionPipeline:
         self.feature_extractor: FeatureExtractor = (
             feature_extractor or FeatureExtractor()
         )
+
+        # ---- Mid-session tier-switching state (P1-S8) --------------------
+        # ``on_mode_change`` is invoked as ``(old_mode, new_mode)`` whenever
+        # ``update_bandwidth`` lands on a different tier. ``current_mode`` is
+        # the live tier (set at ``process`` start and updated by
+        # ``update_bandwidth``). ``mode_transitions`` is the audit trail that
+        # surfaces in ``CompressionResult``.
+        self.on_mode_change: Optional[
+            Callable[[CompressionMode, CompressionMode], None]
+        ] = on_mode_change
+        self.current_mode: Optional[CompressionMode] = None
+        self.mode_transitions: list[tuple[float, CompressionMode]] = []
+
+    def update_bandwidth(self, mbps: float) -> CompressionMode:
+        """Re-evaluate the active compression tier for a new uplink estimate.
+
+        Called mid-session when mobile bandwidth changes. Re-selects the
+        target tier via ``config.select_mode`` and, on a real change, records
+        the transition and fires ``on_mode_change``. A downgrade (e.g.
+        ROI_ENCODED -> EDGE_MINIMAL) stops emitting video and routes future
+        frames to landmark-only extraction; an upgrade takes effect at the
+        next keyframe boundary. (The batch pipeline here records the decision;
+        the live streaming worker consumes ``current_mode`` to route frames.)
+
+        Args:
+            mbps: Latest measured uplink in megabits/sec.
+
+        Returns:
+            The now-active ``CompressionMode``.
+        """
+        target = self.config.select_mode(mbps)
+
+        # First observation: adopt the tier silently -- there is no prior mode
+        # to transition *from*, so no callback and no audit entry.
+        if self.current_mode is None:
+            self.current_mode = target
+            return target
+
+        if target == self.current_mode:
+            return self.current_mode
+
+        old = self.current_mode
+        self.current_mode = target
+        self.mode_transitions.append((time.time(), target))
+        logger.info(
+            "mode_transition old=%s new=%s mbps=%.3f",
+            old.value, target.value, mbps,
+        )
+        if self.on_mode_change is not None:
+            self.on_mode_change(old, target)
+        return target
 
     def process(
         self,
@@ -141,6 +195,10 @@ class CompressionPipeline:
 
         # ---- Step 1: gate-keeper validation -------------------------------
         self._validate_input(input_path)
+
+        # Establish the live tier for this session so update_bandwidth has a
+        # baseline to transition from if the uplink changes mid-run.
+        self.current_mode = mode
 
         # ---- Step 2: subdirectories --------------------------------------
         audio_dir, video_dir, landmarks_dir, features_dir = self._make_subdirs(
@@ -282,6 +340,7 @@ class CompressionPipeline:
             compression_ratios=compression_ratios,
             processing_times=processing_times,
             face_detected_pct=face_pct,
+            mode_transitions=list(self.mode_transitions),
         )
 
         logger.info(
