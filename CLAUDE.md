@@ -248,7 +248,7 @@ The entry-point pipeline every uploaded or recorded video flows through. Lives u
 | Schemas | `backend/shared/schemas/media.py` | shipped — `CompressionMode`, `CompressionConfig`, `CompressionResult` |
 | Audio extraction | `compression/audio_extractor.py` | shipped — FLAC 48k/mono (ML) + Opus 32k/mono (playback) |
 | ROI video encoding | `compression/roi_encoder.py` | shipped — simplified v1 (single-CRF) |
-| Feature extraction | `compression/feature_extractor.py` | shipped — 478-pt landmarks JSON + MFCC/Chroma/Mel/Contrast/Tonnetz `.npz` |
+| Feature extraction | `compression/feature_extractor.py` | shipped — 478-pt landmarks **streaming JSONL** (`_landmarks.jsonl`, flushed every N frames) + MFCC/Chroma/Mel/Contrast/Tonnetz `.npz` |
 | Pipeline orchestrator | `compression/pipeline.py` | shipped — all four modes; graceful per-stage error handling |
 | Model file management | `compression/models.py` | shipped — lazy download + cache for MediaPipe Tasks API models |
 | CLI smoke test | `scripts/test_compression.py` | shipped |
@@ -260,12 +260,33 @@ Notable deviations from the original Day 1 spec:
 2. **ROI v1 is single-CRF** (CRF 22 if a face is detected anywhere, CRF 26 + warning otherwise), not a per-pixel QP map. The spec authorized this Day 1 trade-off; the per-frame bbox track is already produced by the scanner and will feed v2's x265 zones for true ROI encoding.
 3. **CRF 26, not 32, for the no-face fallback.** Hedges toward higher quality when a no-face result might be a detector miss rather than a true negative.
 
+### Phase 1-Bridge — Mobile-Critical Fixes (complete)
+
+Shipped in commit `1fef136`. Driven by a mobile high-usage analysis (see `docs/superpowers/specs/2026-04-27-compression-pipeline-and-psycholinguistic-design.md`).
+
+| Fix | Path | Status |
+|---|---|---|
+| Streaming JSONL landmarks (P1-S6) | `compression/feature_extractor.py` | shipped — peak RAM O(flush_interval), not O(total_frames) |
+| Platform-aware model cache (P1-S7) | `compression/models.py` | shipped — `ALICE_MODEL_CACHE` > Windows `%LOCALAPPDATA%` > Android `$XDG_DATA_HOME` > XDG home |
+| Mid-session tier switching (P1-S8) | `compression/pipeline.py` | shipped — `update_bandwidth()` + `on_mode_change` callback + `mode_transitions` audit |
+
+### Phase 2 — Psycholinguistic Analyzer (complete, Day 1)
+
+The first analysis vector. Lives under `backend/ml-inference/` (hyphenated service root, imported via `sys.path`, NOT a dotted `ml_inference` path).
+
+| Component | Path | Status |
+|---|---|---|
+| Schemas | `backend/shared/schemas/psycholinguistic.py` | shipped — `PsycholinguisticDimension`, `PsycholinguisticScore` (fields are `*_score`-suffixed) |
+| Analyzer | `backend/ml-inference/app/pipelines/psycholinguistic/analyzer.py` | shipped — all 8 dimension scorers + equal-weighted composite, lazy spaCy/VADER load |
+| Tooling | spaCy `en_core_web_sm` + NRCLex + vaderSentiment | hedging is a Day-1 word list (59% FP); replace with BERT in Phase 3 |
+| Tests | `tests/psycholinguistic/` | 29 tests (incl. CLI smoke); full suite 44 passing |
+| CLI | `scripts/test_psycholinguistic.py`, `scripts/test_compress_and_analyze.py` | shipped |
+
 ### Pending (not yet implemented)
 
-The five analysis vectors and surrounding infrastructure remain to be built:
+The remaining four analysis vectors and surrounding infrastructure remain to be built:
 
 - Facial Action Unit detection (custom ResNet-18 + ME-GraphAU)
-- Psycholinguistic analysis stack (spaCy + Empath + NRCLex + VADER + hedging BERT)
 - Vocal tonality flux + emotion2vec+ + Praat acoustics
 - Statement contradiction (WhisperX + DeBERTa-v3 NLI + pgvector)
 - Subject identification (LR-ASD, EdgeFace, pyannote)
