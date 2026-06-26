@@ -84,13 +84,8 @@ class WhisperXBackend:
     memory is bounded by ``config.batch_size`` x chunk, not the whole file.
     """
 
-    def __init__(self, config: "Optional[TranscriptionConfig]" = None) -> None:
-        # Imported here (not at module top) to keep the schema import cheap and
-        # avoid a hard dependency on the transcription extra at import time.
-        from backend.shared.schemas.transcription import TranscriptionConfig
-
+    def __init__(self, config: Optional[TranscriptionConfig] = None) -> None:
         self._config = config or TranscriptionConfig()
-        self._model = None  # lazy
 
     def _resolve_device(self) -> tuple[str, str]:
         """Return (device, compute_type), resolving 'auto'."""
