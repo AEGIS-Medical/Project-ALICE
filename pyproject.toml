@@ -34,9 +34,20 @@ dev = [
     "mypy",
 ]
 
+# Transcription vector (backend/ml-inference). Heavy: torch + faster-whisper +
+# wav2vec2 alignment. Quarantined behind TranscriptionBackend; install only when
+# running the real WhisperXBackend. On Windows + Python 3.13 install torch from
+# the appropriate index first; WSL/Linux is the documented fallback runner.
+transcription = [
+    "whisperx>=3.1",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m 'not slow'"
+markers = [
+    "slow: requires heavy models / downloads (WhisperX). Run with -m slow.",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
