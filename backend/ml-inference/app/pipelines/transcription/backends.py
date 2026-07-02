@@ -80,8 +80,9 @@ class WhisperXBackend:
     whisperx is not installed, ``transcribe`` raises a RuntimeError naming the
     install extra.
 
-    Long audio is handled by WhisperX's built-in Silero VAD chunking; peak
-    memory is bounded by ``config.batch_size`` x chunk, not the whole file.
+    Long audio is handled by WhisperX's built-in Silero VAD chunking. The
+    ``config.vad_chunk_seconds`` field is currently reserved and not yet wired
+    to any whisperx call.
     """
 
     def __init__(self, config: Optional[TranscriptionConfig] = None) -> None:
@@ -129,9 +130,15 @@ class WhisperXBackend:
         language = result.get("language", self._config.language or "en")
 
         # Word-level alignment (ON). Diarization is intentionally NOT run.
-        align_model, metadata = whisperx.load_align_model(
-            language_code=language, device=device
-        )
+        try:
+            align_model, metadata = whisperx.load_align_model(
+                language_code=language, device=device
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"No WhisperX alignment model available for language "
+                f"{language!r}: {exc}"
+            ) from exc
         aligned = whisperx.align(
             result["segments"], align_model, metadata, audio, device,
             return_char_alignments=False,
