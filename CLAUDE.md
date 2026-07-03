@@ -237,7 +237,7 @@ Supported: Zoom (Meeting SDK), Teams (Graph API + Bot), Google Meet (REST API + 
 
 ## IMPLEMENTATION STATUS
 
-Snapshot as of 2026-05-24. The architecture sections above remain authoritative; this section is the truth about what code actually exists today.
+Snapshot as of 2026-07-03. The architecture sections above remain authoritative; this section is the truth about what code actually exists today.
 
 ### Day 1 — Compression Pipeline (complete)
 
@@ -282,19 +282,75 @@ The first analysis vector. Lives under `backend/ml-inference/` (hyphenated servi
 | Tests | `tests/psycholinguistic/` | 29 tests (incl. CLI smoke); full suite 44 passing |
 | CLI | `scripts/test_psycholinguistic.py`, `scripts/test_compress_and_analyze.py` | shipped |
 
+### Session 3 — WhisperX Transcription Vector (complete)
+
+Bridges the compression FLAC output to the psycholinguistic analyzer. Design spec:
+`docs/superpowers/specs/2026-06-25-whisperx-transcription-vector-design.md`.
+
+| Component | Path | Status |
+|---|---|---|
+| Schemas | `backend/shared/schemas/transcription.py` | shipped — `TranscriptSegment`, `Transcript` (with billable `audio_duration_seconds`, reserved `speaker` field), `TranscriptionConfig` |
+| Backend protocol + fake | `backend/ml-inference/app/pipelines/transcription/backends.py` | shipped — `TranscriptionBackend` Protocol + deterministic `FakeTranscriptionBackend` (default test suite needs no torch / no downloads) |
+| Real backend | same file, `WhisperXBackend` | shipped — lazy-imports whisperx inside `transcribe()` only; alignment ON, diarization OFF; `device="auto"` → cuda/float16 else cpu/int8 |
+| Facade | `backend/ml-inference/app/pipelines/transcription/transcriber.py` | shipped — FLAC/WAV-only gate (invariant #1), opaque-facts-only logging (invariant #3) |
+| Tests | `tests/transcription/` | shipped — schema/fake/facade/bridge/CLI suites; real-model test gated `@pytest.mark.slow` (deselected by default via `addopts`) |
+| CLIs | `scripts/test_transcribe.py`; `scripts/test_compress_and_analyze.py` | shipped — the latter is now a LIVE video → FLAC → transcript → psycholinguistic score path (`--fake` runs it offline) |
+
+Key decisions: one WhisperX segment == one statement (the analyzer re-joins all
+statements before parsing, so segmentation never costs linguistic context);
+`whisperx>=3.1` is an optional extra (`pip install -e ".[transcription]"`), NOT
+installed by default — Windows + Py3.13 torch installs are rough; WSL/Linux is the
+documented fallback runner for the real backend. Full suite: 74 passed, 1 deselected.
+
+### Known gaps & next-session priorities (review of 2026-07-03)
+
+Ordered by business impact; items 1-2 gate the mobile/live story.
+
+1. **Landmark telemetry is ~170× over budget.** Streaming JSONL fixed peak RAM, not
+   size: ~12 MB/min vs the ~70 KB/min protobuf budget — EDGE_MINIMAL uplinks cannot
+   carry it. Next session: uint16 quantization (coords are normalized floats),
+   frame-to-frame delta encoding, protobuf wire format.
+2. **No real-time path exists.** Every stage is whole-file batch; `update_bandwidth()`
+   and JSONL flushing anticipate streaming, but there is no frame-loop API, no
+   windowed scorer, no push channel. Define a `ScoreEvent` streaming schema before
+   building any live surface, so live and batch converge on one contract.
+3. **Disfluency dimension will degrade on real transcripts.** Whisper-family models
+   suppress filled pauses (um/uh), so the disfluency scorer reads near-zero once real
+   WhisperX output replaces the fake backend. Validate on real audio; likely move
+   disfluency detection to the vocal-tonality vector (audio-side pause analysis).
+4. **Hedging and certainty scorers double-count tentative markers** ("maybe",
+   "i think", "sort of" appear in both word lists), effectively weighting tentative
+   language ~2× in the equal-weighted composite. Disjoint the lists (certainty keeps
+   only over-certainty markers) or document until learned fusion weights arrive.
+5. **WhatsApp has no live-call API** (E2E-encrypted, no bot join, Business API is
+   messaging-only). Market it as upload-only ("analyze your recorded calls" — the
+   AudioExtractor already ingests .mp4/.m4a/.ogg/.opus); live integration claims
+   apply to Zoom / Teams / Meet / Webex / Slack / LiveKit only. Zoom/Teams
+   per-participant audio streams give perfect speaker attribution without pyannote —
+   a shortcut to speaker-attributed analysis before the diarization session.
+6. **Billing hooks exist; metering does not.** `audio_duration_seconds` (content
+   sold) and `mode_transitions` (compute cost) are recorded per job, but there is no
+   MinIO, no ILM, no tenant model, no usage pipeline. Storage lifecycle must be
+   enforced at infrastructure level (invariant #8) when built. Frame cold storage as
+   baseline-continuity (per-contact history is the moat), not archive fees.
+7. Smaller: upgrade spaCy `en_core_web_sm` → `md` (NER quality for detail-specificity);
+   `TranscriptionConfig.vad_chunk_seconds` is reserved/not wired; ROI v2 x265 zones
+   still pending (bbox track already produced); prototype auth file has a hardcoded
+   secret — never ship it.
+
 ### Pending (not yet implemented)
 
 The remaining four analysis vectors and surrounding infrastructure remain to be built:
 
 - Facial Action Unit detection (custom ResNet-18 + ME-GraphAU)
 - Vocal tonality flux + emotion2vec+ + Praat acoustics
-- Statement contradiction (WhisperX + DeBERTa-v3 NLI + pgvector)
+- Statement contradiction (DeBERTa-v3 NLI + pgvector — WhisperX transcription now shipped; diarization still pending)
 - Subject identification (LR-ASD, EdgeFace, pyannote)
 - Late-fusion ensemble (XGBoost + Platt calibration + SHAP)
 - API gateway, auth, Triton serving, Celery workers, Kafka, Postgres
 - Mobile client (Kotlin Multiplatform)
-- Platform connectors (Zoom / Teams / Meet / Webex / Slack / LiveKit)
-- Storage lifecycle ILM, consent gate, retention purge
+- Platform connectors (Zoom / Teams / Meet / Webex / Slack / LiveKit; WhatsApp = upload-only, see gap #5)
+- Storage lifecycle ILM, consent gate, retention purge, usage metering
 - Testing infrastructure (pytest at 80% / 90% coverage, integration suite, lint config)
 
 ### Operational notes
