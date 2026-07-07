@@ -103,7 +103,7 @@ class LandmarkEncoder:
         source_fps: float,
         frame_skip: int = 1,
         keyframe_interval: int = 30,
-        zlib_level: int = 6,
+        zlib_level: int = 9,
     ) -> None:
         if source_fps <= 0:
             raise ValueError(f"source_fps must be > 0 (got {source_fps})")
