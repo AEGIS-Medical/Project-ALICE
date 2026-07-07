@@ -18,9 +18,10 @@ message LandmarkStreamHeader {
 
 message KeyFrame {
   uint32 frame_number = 1;
-  // 2*landmark_count values: x0,y0,x1,y1,... quantized round(v*65535), v in [0,1].
+  // 2*landmark_count values: x0,y0,x1,y1,... quantized round(v*4095), v in [0,1].
+  // v1 scales: XY 4095, Z 2047.
   repeated uint32 xy = 2 [packed = true];
-  // landmark_count values: quantized round(v*32767), v in [-1,1].
+  // landmark_count values: quantized round(v*2047) as int12, v in [-1,1].
   repeated sint32 z = 3 [packed = true];
 }
 

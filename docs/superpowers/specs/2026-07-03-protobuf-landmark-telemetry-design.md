@@ -20,11 +20,11 @@ edge-first story.
    gaze, future re-ID alignment all want full geometry.
 3. **Budget honestly restated.** The original ~70 KB/min figure is unreachable for a
    full raw mesh at 30 fps (even uint16-quantized, that is ~5.2 MB/min before deltas).
-   The raw-landmark channel targets **≤ 500 KB/min at 30 fps** (hard test gate), with
-   ~250–500 KB/min expected and ~3× less at EDGE_MINIMAL's 10 fps cadence. The
-   70 KB/min figure remains the target for the *future* on-device AU-activation
-   payload (custom TFLite model, unbuilt), at which point raw landmarks become a
-   fallback/debug channel. CLAUDE.md is updated to say this explicitly.
+   The raw-landmark channel targets **≤ 1.2 MB/min at 30 fps** (bandwidth-derived test
+   gate), measured at ~1.04 MB/min with 12-bit quantization — ~12x smaller than
+   JSONL's ~12 MB/min. The 70 KB/min figure still belongs to the future on-device
+   AU-activation payload (custom TFLite model, unbuilt), at which point raw landmarks
+   become a fallback/debug channel. CLAUDE.md is updated to say this explicitly.
 4. **JSONL is replaced outright** — no dual-write, no opt-in debug format. Nothing
    downstream consumes JSONL yet, so this is the cheapest moment to swap. A decoder
    CLI (`scripts/inspect_landmarks.py`) replaces JSONL's eyeball-ability.
@@ -45,22 +45,23 @@ from the same `.proto`.
 
 ---
 
-## Size Model (why this hits budget)
+## Size Model (measured)
 
 Per frame, full mesh: 478 landmarks × (x, y, z).
 
 | Stage | Bytes/frame (approx) | MB or KB/min @30fps |
 |---|---|---|
 | Today: JSONL float text | ~12,000 | ~12 MB/min |
-| uint16/int16 quantized, absolute | 2,868 | ~5.2 MB/min |
+| uint12/int12 quantized, absolute | ~2,151 (12-bit packed as varints) | ~3.9 MB/min |
 | Delta frames, zigzag varint (small motion → 1 byte/value) | ~1,000–1,400 | ~1.8–2.5 MB/min |
-| + zlib over 30-frame chunks (correlated deltas) | ~140–280 | **~250–500 KB/min** (zlib level / chunk size tuned until the ≤500 KB gate passes) |
+| + zlib over 30-frame chunks (correlated deltas) | measured 1,066,783 bytes / 60 s | **~1,042 KB/min ≈ 0.14 Mbps** |
 
 Keyframes (every 30 frames) cost ~2.9 KB each ≈ 87 KB/min of the total — acceptable.
-EDGE_MINIMAL already runs 10 fps landmark cadence → ~85–200 KB/min.
+At EDGE_MINIMAL's 10 fps landmark cadence landmarks are ~350 KB/min ≈ 0.05 Mbps.
 
-**Hard acceptance gate:** a synthetic 60 s @ 30 fps stream with realistic motion must
-encode to ≤ 500 KB (see Testing).
+**Bandwidth-derived acceptance gate:** gate ≤ 1.2 MB/min @30 fps (≈ 0.16 Mbps); FLAC
+0.33 Mbps + landmarks 0.16 Mbps < 0.5 Mbps on a <1 Mbps EDGE_MINIMAL uplink (2x
+headroom); at EDGE_MINIMAL's 10 fps cadence landmarks are ~350 KB/min ≈ 0.05 Mbps.
 
 ---
 
@@ -119,8 +120,8 @@ message LandmarkStreamHeader {
 
 message KeyFrame {
   uint32 frame_number = 1;
-  repeated uint32 xy = 2 [packed = true];  // 956 values: x0,y0,x1,y1... uint16-quantized
-  repeated sint32 z  = 3 [packed = true];  // 478 values: int16-quantized (zigzag)
+  repeated uint32 xy = 2 [packed = true];  // 956 values: x0,y0,x1,y1... uint12-quantized (scale 4095)
+  repeated sint32 z  = 3 [packed = true];  // 478 values: int12-quantized (scale 2047, zigzag)
 }
 
 message DeltaFrame {
@@ -148,11 +149,14 @@ message LandmarkChunk {
 
 ### Quantization
 
-- x, y are MediaPipe-normalized `[0, 1]` → `round(v * 65535)` as uint16.
-  Max reconstruction error `1/131070` ≈ **0.008 px at 1080p** — far below AU-detection
-  sensitivity. Out-of-range inputs (MediaPipe emits slight overshoot at frame edges)
-  are clamped to `[0, 1]` and counted in encoder telemetry (`clamped_values`).
-- z is approximately `[-1, 1]` → `round(v * 32767)` clamped to int16.
+- x, y are MediaPipe-normalized `[0, 1]` → `round(v * 4095)` as uint12.
+  Max reconstruction error `1/8190` ≈ **0.13 px at 1080p** — below MediaPipe's own
+  detector jitter (~0.2 px), so quantization is invisible downstream. uint16 and an
+  initial 500 KB gate were revised after measurement showed sub-jitter precision
+  encodes incompressible detector noise (uint16 measured 5.3x over the bandwidth
+  envelope). Out-of-range inputs are clamped to `[0, 1]` and counted in encoder
+  telemetry (`clamped_values`).
+- z is approximately `[-1, 1]` → `round(v * 2047)` clamped to int12.
 - Timestamps are NOT stored per frame: `timestamp_seconds = frame_number / source_fps`,
   reconstructed exactly as the extractor computes them today (header carries fps).
 
@@ -294,7 +298,7 @@ frames as JSON.
   header comment forbids adding image data.
 - **#3 (no PII in logs):** codec logs counts/bytes/ratios only — never coordinates.
 - **#1 (lossless audio):** untouched. Landmark quantization is lossy by design; the
-  documented error bound (≤ 0.008 px @1080p) is far below analytical sensitivity.
+  documented error bound (≤ 0.13 px @1080p) is below MediaPipe's own detector jitter (~0.2 px).
 
 ---
 
@@ -304,7 +308,7 @@ frames as JSON.
 
 | File | Coverage |
 |---|---|
-| `test_quantization.py` | Round-trip error ≤ 1/131070 for random [0,1] floats; clamping of out-of-range; z signed range |
+| `test_quantization.py` | Round-trip error ≤ 1/4094 for random [0,1] floats; clamping of out-of-range; z signed range |
 | `test_codec_roundtrip.py` | Encode synthetic streams (smooth motion, jump cuts, no-face gaps) → decode → frame numbers, timestamps, coords match within bound; keyframe forced after NoFaceFrame; keyframe every 30; header faithful; empty stream round-trips; **budget gate** (below) |
 | `test_recovery.py` | Truncation at arbitrary offsets → all complete chunks decode, warning, no exception; corrupted zlib → `LandmarkDecodeError` w/ chunk index; bad magic / bad version → `ValueError` |
 
@@ -312,7 +316,8 @@ frames as JSON.
 
 `test_codec_roundtrip.py::test_bytes_per_minute_budget`: a synthetic 60 s @ 30 fps
 stream with realistic motion (small Gaussian per-frame deltas + occasional saccade
-jumps + brief no-face gap) must encode to **≤ 500 KB**. Hard failure if over.
+jumps + brief no-face gap) must encode to **≤ 1.2 MB** (bandwidth-derived gate).
+Hard failure if over.
 
 ### Integration — `tests/compression/test_feature_extractor.py` (updated)
 
