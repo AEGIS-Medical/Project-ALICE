@@ -21,6 +21,8 @@ dependencies = [
     "spacy>=3.7",
     "nrclex>=4.0",
     "vaderSentiment>=3.3.2",
+    # Landmark telemetry wire format (proto/landmarks.proto).
+    "protobuf>=5.26",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +34,9 @@ dev = [
     "ruff",
     "black",
     "mypy",
+    # Bundles a protoc matching the protobuf runtime; used only by `make proto`
+    # to regenerate backend/shared/proto_gen/landmarks_pb2.py (which is committed).
+    "grpcio-tools>=1.66",
 ]
 
 # Transcription vector (backend/ml-inference). Heavy: torch + faster-whisper +

@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package alice.telemetry.v1;
+
+// ALICE landmark telemetry wire schema (Session 4).
+// Spec: docs/superpowers/specs/2026-07-03-protobuf-landmark-telemetry-design.md
+//
+// CLAUDE.md invariant #9: this schema carries landmark geometry ONLY.
+// Raw image or video data must NEVER be added to any message in this file.
+
+message LandmarkStreamHeader {
+  uint32 version = 1;           // format version, starts at 1
+  uint32 landmark_count = 2;    // 478 for MediaPipe Face Mesh
+  float source_fps = 3;         // timestamps reconstruct as frame_number / source_fps
+  uint32 keyframe_interval = 4; // emitted frames between keyframes (== chunk size)
+  uint32 frame_skip = 5;        // extractor's frame_skip setting
+}
+
+message KeyFrame {
+  uint32 frame_number = 1;
+  // 2*landmark_count values: x0,y0,x1,y1,... quantized round(v*65535), v in [0,1].
+  repeated uint32 xy = 2 [packed = true];
+  // landmark_count values: quantized round(v*32767), v in [-1,1].
+  repeated sint32 z = 3 [packed = true];
+}
+
+message DeltaFrame {
+  uint32 frame_number = 1;
+  // Same layouts as KeyFrame, but each value is (current - previous frame).
+  repeated sint32 dxy = 2 [packed = true];
+  repeated sint32 dz = 3 [packed = true];
+}
+
+// A frame where no face was detected (preserves JSONL's "landmarks: null").
+message NoFaceFrame {
+  uint32 frame_number = 1;
+}
+
+message Frame {
+  oneof kind {
+    KeyFrame key = 1;
+    DeltaFrame delta = 2;
+    NoFaceFrame no_face = 3;
+  }
+}
+
+message LandmarkChunk {
+  repeated Frame frames = 1; // up to keyframe_interval frames; starts at a keyframe
+}

@@ -3,7 +3,7 @@
 # Requires GNU Make. On Windows install via Chocolatey (`choco install make`)
 # or use Git Bash + WSL. The recipe shells assume POSIX sh syntax.
 
-.PHONY: install test-compress
+.PHONY: install test-compress proto
 
 PYTHON ?= python
 MODE   ?= raw
@@ -28,3 +28,8 @@ test-compress:
 		exit 2; \
 	fi
 	$(PYTHON) scripts/test_compression.py "$(VIDEO)" --mode $(MODE)
+
+# Regenerate protobuf codegen after editing proto/landmarks.proto.
+# The generated file is COMMITTED; normal builds never need this.
+proto:
+	$(PYTHON) -m grpc_tools.protoc -Iproto --python_out=backend/shared/proto_gen proto/landmarks.proto
