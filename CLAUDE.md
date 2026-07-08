@@ -172,7 +172,7 @@ FLAC 48kHz mono. ALL ML models receive lossless. Opus generated separately for p
 Face region QP -12 (near-lossless SSIM >0.98). Background CRF 28-32. 60-70% size reduction.
 
 ### Tier 3: Edge-First (Preferred for Live)
-On-device: landmarks + AU data + face embeddings + audio features. Transmitted: protobuf telemetry (~70KB/min) + FLAC audio (~2.5MB/min). No raw video leaves device.
+On-device: landmarks + AU data + face embeddings + audio features. Transmitted: landmark telemetry ~1.05 MB/min at 30 fps (ALTM protobuf; ~70 KB/min remains the target for the future on-device AU-activation payload) + FLAC audio (~2.5MB/min). No raw video leaves device.
 
 Adaptive: ≥10Mbps→RAW, 5-10→ROI, 1-5→EDGE_FULL, <1→EDGE_MINIMAL.
 
@@ -237,7 +237,7 @@ Supported: Zoom (Meeting SDK), Teams (Graph API + Bot), Google Meet (REST API + 
 
 ## IMPLEMENTATION STATUS
 
-Snapshot as of 2026-07-03. The architecture sections above remain authoritative; this section is the truth about what code actually exists today.
+Snapshot as of 2026-07-07. The architecture sections above remain authoritative; this section is the truth about what code actually exists today.
 
 ### Day 1 — Compression Pipeline (complete)
 
@@ -248,7 +248,7 @@ The entry-point pipeline every uploaded or recorded video flows through. Lives u
 | Schemas | `backend/shared/schemas/media.py` | shipped — `CompressionMode`, `CompressionConfig`, `CompressionResult` |
 | Audio extraction | `compression/audio_extractor.py` | shipped — FLAC 48k/mono (ML) + Opus 32k/mono (playback) |
 | ROI video encoding | `compression/roi_encoder.py` | shipped — simplified v1 (single-CRF) |
-| Feature extraction | `compression/feature_extractor.py` | shipped — 478-pt landmarks **streaming JSONL** (`_landmarks.jsonl`, flushed every N frames) + MFCC/Chroma/Mel/Contrast/Tonnetz `.npz` |
+| Feature extraction | `compression/feature_extractor.py` | shipped — 478-pt landmarks **ALTM protobuf telemetry** (`_landmarks.pb`, keyframe/delta + zlib chunks; see proto/landmarks.proto) + MFCC/Chroma/Mel/Contrast/Tonnetz `.npz` |
 | Pipeline orchestrator | `compression/pipeline.py` | shipped — all four modes; graceful per-stage error handling |
 | Model file management | `compression/models.py` | shipped — lazy download + cache for MediaPipe Tasks API models |
 | CLI smoke test | `scripts/test_compression.py` | shipped |
@@ -266,7 +266,7 @@ Shipped in commit `1fef136`. Driven by a mobile high-usage analysis (see `docs/s
 
 | Fix | Path | Status |
 |---|---|---|
-| Streaming JSONL landmarks (P1-S6) | `compression/feature_extractor.py` | shipped — peak RAM O(flush_interval), not O(total_frames) |
+| Streaming JSONL landmarks (P1-S6) | `compression/feature_extractor.py` | shipped (superseded by ALTM protobuf in Session 4) — peak RAM O(flush_interval), not O(total_frames) |
 | Platform-aware model cache (P1-S7) | `compression/models.py` | shipped — `ALICE_MODEL_CACHE` > Windows `%LOCALAPPDATA%` > Android `$XDG_DATA_HOME` > XDG home |
 | Mid-session tier switching (P1-S8) | `compression/pipeline.py` | shipped — `update_bandwidth()` + `on_mode_change` callback + `mode_transitions` audit |
 
@@ -306,10 +306,14 @@ documented fallback runner for the real backend. Full suite: 74 passed, 1 desele
 
 Ordered by business impact; items 1-2 gate the mobile/live story.
 
-1. **Landmark telemetry is ~170× over budget.** Streaming JSONL fixed peak RAM, not
-   size: ~12 MB/min vs the ~70 KB/min protobuf budget — EDGE_MINIMAL uplinks cannot
-   carry it. Next session: uint16 quantization (coords are normalized floats),
-   frame-to-frame delta encoding, protobuf wire format.
+1. ~~Landmark telemetry is ~170× over budget~~ **RESOLVED (Session 4):** ALTM
+   protobuf format (proto/landmarks.proto) — 12-bit quantization (0.13 px @1080p,
+   below detector jitter), keyframe/delta, zlib chunks. Measured ~1,042 KB/min at
+   30 fps synthetic (≈0.14 Mbps; real demo clip 1196 KB/min) vs ~12 MB/min
+   JSONL. Gate ≤1.2 MB/min is bandwidth-derived (FLAC 0.33 Mbps + landmarks 0.16
+   Mbps < 0.5 Mbps on a <1 Mbps EDGE_MINIMAL uplink) and enforced by
+   tests/telemetry/test_budget.py. The ~70 KB/min figure now applies to the future
+   AU-activation payload.
 2. **No real-time path exists.** Every stage is whole-file batch; `update_bandwidth()`
    and JSONL flushing anticipate streaming, but there is no frame-loop API, no
    windowed scorer, no push channel. Define a `ScoreEvent` streaming schema before
@@ -357,4 +361,4 @@ The remaining four analysis vectors and surrounding infrastructure remain to be 
 
 - **Runtime venv** lives at `.venv/` (Python 3.13.9 installed locally; not committed).
 - **System binary requirement**: `ffmpeg` must be on PATH (on Windows: `winget install Gyan.FFmpeg`; on macOS: `brew install ffmpeg`; on Linux: distro package).
-- **Verified end-to-end** on `trial_lie_001.mp4` from the Real-Life Trial Deception Detection 2016 dataset. RAW mode: 4.5 s wall-clock, 100% face-detection rate, ROI ratio 0.58. EDGE_FULL mode: 6.4 s wall-clock, 98% face-detection rate, 14.8 MB landmarks JSON.
+- **Verified end-to-end** on `trial_lie_001.mp4` from the Real-Life Trial Deception Detection 2016 dataset. RAW mode: 4.5 s wall-clock, 100% face-detection rate, ROI ratio 0.58. EDGE_FULL mode: 6.4 s wall-clock, 98% face-detection rate, landmark telemetry ~1.05 MB/min at 30 fps (ALTM protobuf; Session 4).
