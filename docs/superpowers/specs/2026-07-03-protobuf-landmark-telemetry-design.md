@@ -59,6 +59,8 @@ Per frame, full mesh: 478 landmarks × (x, y, z).
 Keyframes (every 30 frames) cost ~2.9 KB each ≈ 87 KB/min of the total — acceptable.
 At EDGE_MINIMAL's 10 fps landmark cadence landmarks are ~350 KB/min ≈ 0.05 Mbps.
 
+Real demo clip (trial_truth_001.mp4, EDGE_FULL): measured 1,196 KB/min — 0.3% under the gate, near the line by design; the operational safety margin lives at the uplink budget (combined stream <0.5 Mbps on a <1 Mbps EDGE_MINIMAL link), not the gate.
+
 **Bandwidth-derived acceptance gate:** gate ≤ 1.2 MB/min @30 fps (≈ 0.16 Mbps); FLAC
 0.33 Mbps + landmarks 0.16 Mbps < 0.5 Mbps on a <1 Mbps EDGE_MINIMAL uplink (2x
 headroom); at EDGE_MINIMAL's 10 fps cadence landmarks are ~350 KB/min ≈ 0.05 Mbps.

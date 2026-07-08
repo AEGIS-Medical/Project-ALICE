@@ -219,6 +219,9 @@ class LandmarkEncoder:
         self._fh.flush()
         self.chunks_written += 1
         self._chunk = pb.LandmarkChunk()
+        # _prev_xy is intentionally NOT reset here: the next add_frame sees _frames_in_chunk == 0
+        # and emits a KeyFrame regardless, which is what guarantees every chunk starts at a
+        # keyframe. Do not "fix" this by nulling prev.
         self._frames_in_chunk = 0
 
 

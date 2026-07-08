@@ -10,7 +10,7 @@ from backend.shared.telemetry.landmark_codec import (
     quantize_frame,
 )
 
-MAX_XY_ERR = 1.0 / (2 * XY_SCALE)   # 1/131070
+MAX_XY_ERR = 1.0 / (2 * XY_SCALE)   # 1/8190 at the v1 12-bit scale
 MAX_Z_ERR = 1.0 / (2 * Z_SCALE)
 
 

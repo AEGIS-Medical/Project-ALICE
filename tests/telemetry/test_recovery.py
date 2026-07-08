@@ -97,7 +97,7 @@ def test_unsupported_version_raises(tmp_path):
 def test_empty_file_and_header_only_file(tmp_path):
     empty = tmp_path / "empty.pb"
     empty.write_bytes(b"")
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not an ALICE landmark telemetry file"):
         LandmarkDecoder(empty)
 
     header_only = tmp_path / "h.pb"

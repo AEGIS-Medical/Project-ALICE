@@ -7,6 +7,7 @@ package alice.telemetry.v1;
 //
 // CLAUDE.md invariant #9: this schema carries landmark geometry ONLY.
 // Raw image or video data must NEVER be added to any message in this file.
+// Quantization scales are version-locked: any change to the XY/Z scales MUST increment LandmarkStreamHeader.version; decoders keyed to v1 assume XY 4095, Z 2047.
 
 message LandmarkStreamHeader {
   uint32 version = 1;           // format version, starts at 1
