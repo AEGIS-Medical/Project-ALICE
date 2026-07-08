@@ -266,7 +266,7 @@ class CompressionResult(BaseModel):
     # ---- Tier 3 edge artifacts (EDGE_FULL / EDGE_MINIMAL) -----------------
     landmarks_path: Optional[Path] = Field(
         default=None,
-        description="Per-frame face landmarks + AU activations (parquet/protobuf).",
+        description="ALTM protobuf telemetry (.pb; see proto/landmarks.proto).",
     )
     landmarks_size_bytes: Optional[int] = Field(default=None, ge=0)
     features_path: Optional[Path] = Field(

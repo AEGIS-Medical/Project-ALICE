@@ -4,7 +4,7 @@ Two distinct extractors live here. Both produce artifacts that downstream
 analyzers consume directly -- nothing in the pipeline re-encodes them:
 
   * :meth:`FeatureExtractor.extract_landmarks`
-        MediaPipe Face Mesh -> streaming JSON Lines (``.jsonl``) of 478
+        MediaPipe Face Mesh -> ALTM protobuf telemetry (``.pb``) of 478
         (x, y, z) landmarks per frame, flushed incrementally so peak RAM is
         bounded. Consumed by the AU detector and the gaze sub-vector.
   * :meth:`FeatureExtractor.extract_audio_features`
@@ -20,7 +20,6 @@ names invariant #1 by number so the failure mode is unmistakable in logs.
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 
@@ -31,6 +30,7 @@ import numpy as np
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core.base_options import BaseOptions
 
+from backend.shared.telemetry.landmark_codec import LandmarkEncoder
 from backend.workers.app.compression.audio_extractor import UnsupportedMediaError
 from backend.workers.app.compression.models import face_landmarker_model
 
@@ -68,10 +68,9 @@ class FeatureExtractor:
             frame (the default and what AU analysis wants). Higher values
             trade temporal resolution for speed; raise only when wall-clock
             matters more than microexpression timing.
-        flush_interval: Flush the streaming landmark writer to disk every N
-            emitted frames (default 30 = ~1 s at 30 fps). Bounds peak RAM to
-            O(flush_interval) instead of O(total_frames) and guarantees a
-            readable partial file if the process is killed mid-call.
+        flush_interval: Deprecated alias for the telemetry encoder's
+            keyframe_interval (chunk flush cadence). Retained for P1-S6
+            call-site compatibility. Default 30 = ~1 s at 30 fps.
     """
 
     # ---- Audio feature dimensions (matched to spec) ----------------------
@@ -117,11 +116,10 @@ class FeatureExtractor:
         output_dir: Path,
         flush_interval: int | None = None,
     ) -> Path:
-        """Stream 478-point Face Mesh landmarks per frame to a JSON Lines file.
+        """Stream 478-point Face Mesh landmarks per frame to an ALTM protobuf file.
 
-        Each frame's record is serialised and written immediately (one JSON
-        object per line), and the writer is flushed to disk every
-        ``flush_interval`` emitted frames. This keeps peak RAM at
+        Frames are encoded with keyframe/delta compression and flushed to disk
+        every ``flush_interval`` emitted frames. This keeps peak RAM at
         O(flush_interval) rather than O(total_frames) -- a 60-minute call at
         30 fps would otherwise accumulate ~600 MB of dicts and get OOM-killed
         on Android -- and guarantees a readable partial file if the process is
@@ -131,28 +129,25 @@ class FeatureExtractor:
         478-point mesh (468 face + 10 iris).
 
         Frames where no face is detected are still emitted with
-        ``"landmarks": null`` so downstream analyzers can align by
+        ``landmarks=None`` so downstream analyzers can align by
         ``frame_number`` without re-deriving the timeline.
 
         Args:
             video_path: Source video. Must be a video container (audio-only
                 inputs are rejected).
             output_dir: Destination. Created if missing.
-            flush_interval: Override the instance-level flush cadence for this
-                call. ``None`` (default) uses ``self.flush_interval``.
+            flush_interval: Deprecated alias for the telemetry encoder's
+                keyframe_interval (chunk flush cadence). Retained for P1-S6
+                call-site compatibility. ``None`` (default) uses
+                ``self.flush_interval``.
 
         Returns:
-            Path to the JSON Lines file:
-            ``{output_dir}/{stem}_landmarks.jsonl``.
+            Path to the ALTM protobuf telemetry file:
+            ``{output_dir}/{stem}_landmarks.pb``.
 
-            Each line is one independently-parseable object::
-
-                {"frame_number": int,
-                 "timestamp_seconds": float,
-                 "landmarks": [[x, y, z], ...]}   // 478 entries, or null
-
-            Coordinates are normalized in ``[0, 1]`` for x/y; z is the
-            depth value MediaPipe reports (negative = closer to camera).
+            Read back with
+            ``LandmarkDecoder(path).frames()`` which yields
+            ``DecodedFrame(frame_number, timestamp_seconds, landmarks|None)``.
 
         Raises:
             FileNotFoundError: ``video_path`` does not exist.
@@ -196,45 +191,34 @@ class FeatureExtractor:
             output_face_blendshapes=False,
             output_facial_transformation_matrixes=False,
         )
-        # Tasks API objects use explicit close(), not a context manager.
+        output_path = output_dir / f"{video_path.stem}_landmarks.pb"
+
         landmarker = vision.FaceLandmarker.create_from_options(options)
-        output_path = output_dir / f"{video_path.stem}_landmarks.jsonl"
-        # The file context wraps the whole decode loop so an interruption
-        # (exception / kill) still leaves a flushed, well-formed partial file:
-        # closing the handle flushes any tail buffer past the last interval.
         try:
-            with open(output_path, "w", encoding="utf-8") as fh:
+            with LandmarkEncoder(
+                output_path,
+                source_fps=fps,
+                frame_skip=self.frame_skip,
+                keyframe_interval=interval,
+            ) as encoder:
                 while True:
                     ok, frame = cap.read()
                     if not ok:
                         break
                     if frame_idx % self.frame_skip == 0:
-                        # MediaPipe expects RGB; cv2 reads BGR.
                         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-                        # detect_for_video requires monotonically increasing
-                        # timestamps in ms; derive from the source frame index.
                         timestamp_ms = int((frame_idx / fps) * 1000)
                         result = landmarker.detect_for_video(mp_image, timestamp_ms)
 
                         landmarks: list[list[float]] | None = None
                         if result.face_landmarks:
-                            # face_landmarks is a list-of-lists; one inner list
-                            # per detected face. We pin num_faces=1, so [0] is safe.
                             mesh = result.face_landmarks[0]
                             landmarks = [[lm.x, lm.y, lm.z] for lm in mesh]
                             frames_with_face += 1
 
-                        record = {
-                            "frame_number": frame_idx,
-                            "timestamp_seconds": frame_idx / fps,
-                            "landmarks": landmarks,
-                        }
-                        fh.write(json.dumps(record))
-                        fh.write("\n")
+                        encoder.add_frame(frame_idx, landmarks)
                         frames_processed += 1
-                        if frames_processed % interval == 0:
-                            fh.flush()
                     frame_idx += 1
         finally:
             landmarker.close()
