@@ -336,24 +336,24 @@ class CompressionResult(BaseModel):
             return Path(v)
         raise TypeError(f"Expected Path, str, or None; got {type(v).__name__}")
 
-    # Landmark artifact extensions accepted during the JSON -> JSONL
-    # transition (P1-S6). ``.jsonl`` is the streaming format going forward;
-    # ``.json`` is still accepted so older results validate.
-    _LANDMARKS_SUFFIXES: frozenset[str] = frozenset({".json", ".jsonl"})
+    # Session 4 replaced JSONL landmark streaming with ALTM protobuf framing
+    # (see proto/landmarks.proto). ``.pb`` is the only accepted suffix;
+    # ``.json`` / ``.jsonl`` are fully retired — no legacy files exist.
+    _LANDMARKS_SUFFIXES: frozenset[str] = frozenset({".pb"})
 
     @model_validator(mode="after")
     def _landmarks_suffix_supported(self) -> "CompressionResult":
-        """Restrict the landmark artifact to ``.json`` / ``.jsonl``.
+        """Restrict the landmark artifact to ``.pb`` (ALTM protobuf).
 
-        P1-S6 streams landmarks as JSON Lines; this guards against a caller
-        wiring an unrelated artifact into ``landmarks_path`` while keeping the
-        legacy ``.json`` extension valid during the transition.
+        Session 4 retired JSONL landmark streaming in favour of the ALTM
+        protobuf wire format (proto/landmarks.proto).  This validator guards
+        against a caller wiring an unrelated artifact into ``landmarks_path``.
         """
         if self.landmarks_path is not None:
             suffix = self.landmarks_path.suffix.lower()
             if suffix not in self._LANDMARKS_SUFFIXES:
                 raise ValueError(
-                    f"landmarks_path must be .json or .jsonl "
+                    f"landmarks_path must be .pb (ALTM protobuf) "
                     f"(got {suffix!r} for {self.landmarks_path})"
                 )
         return self

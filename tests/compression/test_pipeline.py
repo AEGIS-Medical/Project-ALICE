@@ -68,8 +68,8 @@ class _FakeFeat:
     last_frames_with_face = 1
 
     def extract_landmarks(self, _input_path, landmarks_dir, flush_interval=None):
-        p = landmarks_dir / "a_landmarks.jsonl"
-        p.write_text("{}\n", encoding="utf-8")
+        p = landmarks_dir / "a_landmarks.pb"
+        p.write_bytes(b"")
         return p
 
     def extract_audio_features(self, _flac, features_dir, **_kw):

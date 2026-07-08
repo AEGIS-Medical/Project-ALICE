@@ -1,8 +1,9 @@
-"""Schema tests touched by the Phase 1-Bridge stories.
+"""Schema tests for the CompressionResult landmark artifact validator.
 
-P1-S6 changes the landmark artifact extension to ``.jsonl``; the
-``CompressionResult`` validator must accept both ``.json`` (legacy) and
-``.jsonl`` (new) during the transition, and reject anything else.
+Session 4 retired JSONL landmark streaming and replaced it outright with ALTM
+protobuf (``.pb``).  ``.json`` and ``.jsonl`` are no longer accepted; ``.pb``
+is the only valid suffix.  These tests pin that migration so any accidental
+rollback is caught immediately.
 """
 
 from __future__ import annotations
@@ -29,20 +30,30 @@ def _result(**overrides):
     return CompressionResult(**base)
 
 
-def test_landmarks_jsonl_accepted():
+def test_landmarks_pb_accepted():
     r = _result(
-        landmarks_path=Path("out/landmarks/in_landmarks.jsonl"),
+        landmarks_path=Path("out/landmarks/in_landmarks.pb"),
         landmarks_size_bytes=3,
     )
-    assert r.landmarks_path.suffix == ".jsonl"
+    assert r.landmarks_path.suffix == ".pb"
 
 
-def test_landmarks_json_still_accepted():
-    r = _result(
-        landmarks_path=Path("out/landmarks/in_landmarks.json"),
-        landmarks_size_bytes=3,
-    )
-    assert r.landmarks_path.suffix == ".json"
+def test_landmarks_jsonl_now_rejected():
+    """JSONL was the old streaming format — fully retired in Session 4."""
+    with pytest.raises(ValidationError):
+        _result(
+            landmarks_path=Path("out/landmarks/in_landmarks.jsonl"),
+            landmarks_size_bytes=3,
+        )
+
+
+def test_landmarks_json_now_rejected():
+    """Legacy .json format — fully retired alongside .jsonl in Session 4."""
+    with pytest.raises(ValidationError):
+        _result(
+            landmarks_path=Path("out/landmarks/in_landmarks.json"),
+            landmarks_size_bytes=3,
+        )
 
 
 def test_landmarks_bad_suffix_rejected():
