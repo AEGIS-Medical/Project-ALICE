@@ -302,6 +302,27 @@ statements before parsing, so segmentation never costs linguistic context);
 installed by default — Windows + Py3.13 torch installs are rough; WSL/Linux is the
 documented fallback runner for the real backend. Full suite: 74 passed, 1 deselected.
 
+### Session 5 — ScoreEvent Streaming Contract + Replayer (complete)
+
+Closes gap #2 at the contract layer (scope A: no live infra). Design spec:
+`docs/superpowers/specs/2026-07-08-scoreevent-streaming-design.md`.
+
+| Component | Path | Status |
+|---|---|---|
+| Schemas | `backend/shared/schemas/score_event.py` | shipped — `ScoreEventKind`, `StreamScorerConfig`, `ScoreEvent` (cumulative + recent per event), `validate_event_stream` |
+| Windowed scorer | `backend/ml-inference/app/pipelines/streaming/windowed_scorer.py` | shipped — `stream_scores()` strictly causal sync generator; ticks every `tick_seconds`, skips silent ticks, `recent=None` when sparse |
+| Replayer | `backend/ml-inference/app/pipelines/streaming/replayer.py` | shipped — `ScoreReplayer` wall-clock pacing (pace 0 = instant), injectable sleep, clean cancellation via generator close |
+| CLI | `scripts/replay_scores.py` | shipped — `--transcript json` or `--video` (`--fake` offline), `--pace/--tick/--recent-window` |
+| Tests | `tests/streaming/` | shipped — schema contract, causality gate (future-mutation invariance), **batch-convergence acceptance gate** (`test_convergence.py`: FINAL == batch field-for-field), pacing/cancellation, CLI smoke |
+
+Key decisions (locked in the spec — do not re-litigate): sync generator core
+with the async FastAPI/WebSocket shell as a documented future session
+(decision #4: per-tick work is CPU-bound; the shell drives the generator via
+`asyncio.to_thread(next, gen)`); each interim carries cumulative + recent;
+exactly one FINAL, equal to batch; gap #4 (hedging/certainty double-count)
+deliberately deferred until after convergence landed, so the gate's baseline
+stayed stable.
+
 ### Known gaps & next-session priorities (review of 2026-07-03)
 
 Ordered by business impact; items 1-2 gate the mobile/live story.
@@ -314,10 +335,15 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    Mbps < 0.5 Mbps on a <1 Mbps EDGE_MINIMAL uplink) and enforced by
    tests/telemetry/test_budget.py. The ~70 KB/min figure now applies to the future
    AU-activation payload.
-2. **No real-time path exists.** Every stage is whole-file batch; `update_bandwidth()`
-   and JSONL flushing anticipate streaming, but there is no frame-loop API, no
-   windowed scorer, no push channel. Define a `ScoreEvent` streaming schema before
-   building any live surface, so live and batch converge on one contract.
+2. ~~No real-time path exists~~ **RESOLVED at the contract layer (Session 5):**
+   `ScoreEvent` schema + causal windowed scorer + replayer shipped; batch and
+   stream converge on one contract, enforced by
+   tests/streaming/test_convergence.py (FINAL == batch, field-for-field).
+   Remaining for a true live surface (its own session): async
+   FastAPI/WebSocket shell around the sync generator
+   (`asyncio.to_thread(next, gen)`, per-session cancellation), incremental
+   transcription, and platform media ingest. The windowed events already
+   power the report's scrubbable score timeline directly.
 3. **Disfluency dimension will degrade on real transcripts.** Whisper-family models
    suppress filled pauses (um/uh), so the disfluency scorer reads near-zero once real
    WhisperX output replaces the fake backend. Validate on real audio; likely move
