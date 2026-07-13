@@ -367,6 +367,26 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    `TranscriptionConfig.vad_chunk_seconds` is reserved/not wired; ROI v2 x265 zones
    still pending (bbox track already produced); prototype auth file has a hardcoded
    secret — never ship it.
+8. **Psycholinguistic vector is English-only — deliberate for v1, but currently
+   unguarded.** Tooling (spaCy `en_core_web_sm`, NRCLex, VADER, the
+   hedging/certainty/filler word lists) and the underlying research base
+   (Newman et al. pronoun effects, Pérez-Rosas corpora) are English. Pro-drop
+   languages (es/ja/tr/it) hollow out the pronoun-shift dimension; fillers,
+   negation norms, and clause-depth baselines differ per language; cross-language
+   cue transfer is weak, so each language needs its own validation — not just a
+   tokenizer swap. **Never translate-then-score:** MT destroys the surface
+   stylometry being measured (normalizes hedges, deletes disfluencies, inserts
+   pronouns the speaker never uttered, substitutes the translator's syntax).
+   Near term: add a transcript-language gate so non-`"en"` transcripts never flow
+   silently through the English pipeline (contract note: `ScoreEvent.cumulative`
+   is required, so gating needs a small schema decision). Expansion path, per
+   language: a resource pack (spaCy model + emotion/hedging lexicons + filler
+   list), per-language dimension masks and ensemble weights, and a validation
+   corpus. What already travels: WhisperX transcription (~99 languages;
+   `Transcript.language` is recorded), contradiction detection once
+   embeddings/NLI go multilingual (mDeBERTa-v3/XNLI), acoustic features, facial
+   AUs, and the per-subject baseline — deviation-from-self partially factors out
+   language and culture by construction.
 
 ### Pending (not yet implemented)
 
