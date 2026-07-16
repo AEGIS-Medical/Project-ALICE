@@ -100,9 +100,18 @@ def main() -> int:
         print("  No speech detected -- nothing to analyze.")
         return 0
 
-    from app.pipelines.psycholinguistic.analyzer import PsycholinguisticAnalyzer
+    from app.pipelines.psycholinguistic.analyzer import (
+        PsycholinguisticAnalyzer,
+        UnsupportedLanguageError,
+    )
 
-    score = PsycholinguisticAnalyzer().analyze(statements)
+    try:
+        score = PsycholinguisticAnalyzer().analyze(
+            statements, language=transcript.language
+        )
+    except UnsupportedLanguageError as exc:
+        print(f"  Skipped: {exc}", file=sys.stderr)
+        return 1
     print(f"  Statements analyzed: {score.statement_count}")
     print(f"  Composite score:     {score.composite_score:5.1f}/100  "
           f"(confidence: {score.confidence})")

@@ -85,3 +85,35 @@ def test_requires_exactly_one_input(tmp_path):
         text=True,
     )
     assert result.returncode != 0
+
+
+def test_replay_cli_rejects_non_english_transcript(tmp_path):
+    from backend.shared.schemas.transcription import Transcript, TranscriptSegment
+
+    transcript = Transcript(
+        segments=[
+            TranscriptSegment(
+                text="Hola, estaba en casa.", start_seconds=0.0, end_seconds=2.0
+            )
+        ],
+        language="es",
+        audio_duration_seconds=2.0,
+        model_name="fake-distil",
+        backend="fake",
+    )
+    p = tmp_path / "es_transcript.json"
+    p.write_text(transcript.model_dump_json(), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(_REPO_ROOT / "scripts" / "replay_scores.py"),
+            "--transcript", str(p), "--pace", "0",
+        ],
+        cwd=_REPO_ROOT, capture_output=True, text=True,
+    )
+    assert result.returncode == 1
+    assert "es" in result.stderr
+    assert "not supported" in result.stderr
+    # Invariant #3: no transcript text in the error surface.
+    assert "Hola" not in result.stderr and "casa" not in result.stderr

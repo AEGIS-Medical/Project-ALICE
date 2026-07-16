@@ -129,6 +129,7 @@ def main() -> int:
             print("Re-run with --fake to exercise the path offline.")
             return 1
 
+    from app.pipelines.psycholinguistic.analyzer import UnsupportedLanguageError
     from app.pipelines.streaming import ScoreReplayer
 
     config = StreamScorerConfig(
@@ -141,9 +142,18 @@ def main() -> int:
     )
     print("-" * 72)
     count = 0
-    for event in ScoreReplayer(transcript, config).replay(pace=args.pace):
-        print(_format_event(event), flush=True)
-        count += 1
+    try:
+        for event in ScoreReplayer(transcript, config).replay(pace=args.pace):
+            print(_format_event(event), flush=True)
+            count += 1
+    except UnsupportedLanguageError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        print(
+            "The psycholinguistic vector is English-only for v1 (CLAUDE.md "
+            "gap #8); transcripts are never translate-then-scored.",
+            file=sys.stderr,
+        )
+        return 1
     if count == 0:
         print("(no speech -- empty stream; nothing to score)")
     print("-" * 72)
