@@ -35,6 +35,27 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 
 logger = logging.getLogger(__name__)
 
+# Languages this vector can score. English-only for v1 (gap #8): the spaCy
+# model, NRCLex, VADER, and every word list above are English, and the
+# research base (Newman et al., Perez-Rosas corpora) is English. NEVER
+# translate-then-score: MT destroys the surface stylometry being measured.
+# A future per-language resource pack registers its code here.
+SUPPORTED_LANGUAGES: frozenset[str] = frozenset({"en"})
+
+
+class UnsupportedLanguageError(ValueError):
+    """Transcript language cannot be scored by this English-only vector.
+
+    The message names the language code and the supported set -- never
+    transcript text (CLAUDE.md invariant #3).
+    """
+
+
+def _primary_subtag(language: str) -> str:
+    """'en-US' / 'en_GB' / 'EN' -> 'en' (BCP-47 primary subtag, lowered)."""
+    return language.strip().lower().replace("_", "-").split("-", 1)[0]
+
+
 # spaCy model used for all parsing. Small (~12 MB), no GPU, deterministic.
 _SPACY_MODEL = "en_core_web_sm"
 
@@ -152,7 +173,11 @@ class PsycholinguisticAnalyzer:
 
     # ---- public API --------------------------------------------------------
 
-    def analyze(self, statements: list[str]) -> PsycholinguisticScore:
+    def analyze(
+        self,
+        statements: list[str],
+        language: str | None = None,
+    ) -> PsycholinguisticScore:
         """Score a list of statements across all eight dimensions.
 
         Statements are concatenated into a single document for parsing (Day 1;
@@ -163,13 +188,24 @@ class PsycholinguisticAnalyzer:
 
         Args:
             statements: Speaker-attributed statement strings.
+            language: BCP-47 code from Transcript.language. None (default)
+                skips the gate for legacy text-only callers; a non-English
+                value raises UnsupportedLanguageError before any scoring
+                (gap #8).
 
         Returns:
             A frozen ``PsycholinguisticScore``.
 
         Raises:
+            UnsupportedLanguageError: ``language`` is not supported.
             ValueError: ``statements`` is empty.
         """
+        if language is not None and _primary_subtag(language) not in SUPPORTED_LANGUAGES:
+            raise UnsupportedLanguageError(
+                f"language {language!r} is not supported by the "
+                f"psycholinguistic vector; supported: "
+                f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+            )
         if not statements:
             raise ValueError("No statements provided")
 
