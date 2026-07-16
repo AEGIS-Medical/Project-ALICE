@@ -115,5 +115,9 @@ def test_replay_cli_rejects_non_english_transcript(tmp_path):
     assert result.returncode == 1
     assert "es" in result.stderr
     assert "not supported" in result.stderr
+    # Pin the FRIENDLY handling, not just any exit-1: a regression to an
+    # unhandled traceback must fail this test.
+    assert "Traceback" not in result.stderr
+    assert "English-only" in result.stderr
     # Invariant #3: no transcript text in the error surface.
     assert "Hola" not in result.stderr and "casa" not in result.stderr
