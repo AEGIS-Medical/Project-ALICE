@@ -278,7 +278,7 @@ The first analysis vector. Lives under `backend/ml-inference/` (hyphenated servi
 |---|---|---|
 | Schemas | `backend/shared/schemas/psycholinguistic.py` | shipped — `PsycholinguisticDimension`, `PsycholinguisticScore` (fields are `*_score`-suffixed) |
 | Analyzer | `backend/ml-inference/app/pipelines/psycholinguistic/analyzer.py` | shipped — all 8 dimension scorers + equal-weighted composite, lazy spaCy/VADER load |
-| Tooling | spaCy `en_core_web_sm` + NRCLex + vaderSentiment | hedging is a Day-1 word list (59% FP); replace with BERT in Phase 3 |
+| Tooling | spaCy `en_core_web_md` + NRCLex + vaderSentiment | hedging is a Day-1 word list (59% FP); replace with BERT in Phase 3 |
 | Tests | `tests/psycholinguistic/` | 29 tests (incl. CLI smoke); full suite 44 passing |
 | CLI | `scripts/test_psycholinguistic.py`, `scripts/test_compress_and_analyze.py` | shipped |
 
@@ -348,10 +348,10 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    suppress filled pauses (um/uh), so the disfluency scorer reads near-zero once real
    WhisperX output replaces the fake backend. Validate on real audio; likely move
    disfluency detection to the vocal-tonality vector (audio-side pause analysis).
-4. **Hedging and certainty scorers double-count tentative markers** ("maybe",
-   "i think", "sort of" appear in both word lists), effectively weighting tentative
-   language ~2× in the equal-weighted composite. Disjoint the lists (certainty keeps
-   only over-certainty markers) or document until learned fusion weights arrive.
+4. ~~Hedging and certainty scorers double-count tentative markers~~ **RESOLVED
+   (Session 6):** `_TENTATIVE_MARKERS` deleted; dimension 8 is over-certainty /
+   emphatic assertion only; tentative language is owned solely by hedging. A
+   list-disjointness regression test pins it.
 5. **WhatsApp has no live-call API** (E2E-encrypted, no bot join, Business API is
    messaging-only). Market it as upload-only ("analyze your recorded calls" — the
    AudioExtractor already ingests .mp4/.m4a/.ogg/.opus); live integration claims
@@ -363,13 +363,12 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    MinIO, no ILM, no tenant model, no usage pipeline. Storage lifecycle must be
    enforced at infrastructure level (invariant #8) when built. Frame cold storage as
    baseline-continuity (per-contact history is the moat), not archive fees.
-7. Smaller: upgrade spaCy `en_core_web_sm` → `md` (NER quality for detail-specificity);
-   `TranscriptionConfig.vad_chunk_seconds` is reserved/not wired; ROI v2 x265 zones
-   still pending (bbox track already produced); prototype auth file has a hardcoded
-   secret — never ship it.
-8. **Psycholinguistic vector is English-only — deliberate for v1, but currently
-   unguarded.** Tooling (spaCy `en_core_web_sm`, NRCLex, VADER, the
-   hedging/certainty/filler word lists) and the underlying research base
+7. Smaller: `TranscriptionConfig.vad_chunk_seconds` is reserved/not wired; ROI v2
+   x265 zones still pending (bbox track already produced); prototype auth file has
+   a hardcoded secret — never ship it.
+8. **Psycholinguistic vector is English-only — deliberate for v1.** Tooling
+   (spaCy `en_core_web_md`, NRCLex, VADER, the hedging/certainty/filler word
+   lists) and the underlying research base
    (Newman et al. pronoun effects, Pérez-Rosas corpora) are English. Pro-drop
    languages (es/ja/tr/it) hollow out the pronoun-shift dimension; fillers,
    negation norms, and clause-depth baselines differ per language; cross-language
@@ -379,10 +378,15 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    pronouns the speaker never uttered, substitutes the translator's syntax).
    Near term: add a transcript-language gate so non-`"en"` transcripts never flow
    silently through the English pipeline (contract note: `ScoreEvent.cumulative`
-   is required, so gating needs a small schema decision). Expansion path, per
-   language: a resource pack (spaCy model + emotion/hedging lexicons + filler
-   list), per-language dimension masks and ensemble weights, and a validation
-   corpus. What already travels: WhisperX transcription (~99 languages;
+   is required, so gating needs a small schema decision). **Near-term gate SHIPPED
+   (Session 6):** `UnsupportedLanguageError` raised before any scoring at
+   `analyze(language=...)` and `stream_scores` entry (zero events; ScoreEvent
+   schema untouched); CLIs exit 1 with the language named. Hard-fail is the v1
+   behavior; the late-fusion session adds graceful per-vector degradation.
+   Expansion path (per-language packs) unchanged below: a resource pack
+   (spaCy model + emotion/hedging lexicons + filler list), per-language
+   dimension masks and ensemble weights, and a validation corpus. What
+   already travels: WhisperX transcription (~99 languages;
    `Transcript.language` is recorded), contradiction detection once
    embeddings/NLI go multilingual (mDeBERTa-v3/XNLI), acoustic features, facial
    AUs, and the per-subject baseline — deviation-from-self partially factors out

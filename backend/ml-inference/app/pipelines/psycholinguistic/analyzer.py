@@ -8,12 +8,12 @@ of the late-fusion ensemble weight.
 
 This is a *behavioral anomaly* scorer, not a verdict engine: every score is a
 deviation signal, never a probability of deception (CLAUDE.md). Day 1 uses
-lightweight, fully-local tooling -- spaCy ``en_core_web_sm``, NRCLex, and VADER
+lightweight, fully-local tooling -- spaCy ``en_core_web_md``, NRCLex, and VADER
 -- with no large model downloads. Several heuristics (notably hedging) are
 explicitly marked for replacement with fine-tuned classifiers in Phase 3.
 
 Tooling (CLAUDE.md "Psycholinguistic Analysis Stack"):
-    spaCy en_core_web_sm   POS, dependency parse, NER, pronouns, negation
+    spaCy en_core_web_md   POS, dependency parse, NER, pronouns, negation
     NRCLex                 8 granular emotion categories
     VADER                  valence-aware sentiment / certainty
 """
@@ -56,8 +56,9 @@ def _primary_subtag(language: str) -> str:
     return language.strip().lower().replace("_", "-").split("-", 1)[0]
 
 
-# spaCy model used for all parsing. Small (~12 MB), no GPU, deterministic.
-_SPACY_MODEL = "en_core_web_sm"
+# spaCy model used for all parsing. md (~40 MB): better vectors/NER than sm --
+# detail-specificity depends on NER quality (gap #7).
+_SPACY_MODEL = "en_core_web_md"
 
 # First-person singular tokens (lower-cased lemma/text match) per Newman et al.
 # (2003): a *drop* in first-person singular usage is deception-indicative.

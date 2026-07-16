@@ -16,8 +16,8 @@ dependencies = [
     "pydantic>=2.0",
     # Psycholinguistic analysis vector (backend/ml-inference). Empath is in the
     # CLAUDE.md stack but the Day-1 analyzer does not import it yet, so it is
-    # intentionally omitted until used. The en_core_web_sm spaCy model is not a
-    # pip dependency; install it via `python -m spacy download en_core_web_sm`.
+    # intentionally omitted until used. The en_core_web_md spaCy model is not a
+    # pip dependency; install it via `python -m spacy download en_core_web_md`.
     "spacy>=3.7",
     "nrclex>=4.0",
     "vaderSentiment>=3.3.2",
