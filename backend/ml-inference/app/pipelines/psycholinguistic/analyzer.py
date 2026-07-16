@@ -108,9 +108,13 @@ _NEGATION_POINTS_PER_RATE = 25.0
 # NE density rarely exceeds ~0.35, so the multiplier is large.
 _SPECIFICITY_POINTS_PER_DENSITY = 200.0
 
-# Absolute-certainty markers and tentative markers. EITHER extreme (over-
-# certain or very tentative) raises the anomaly score; neutral confident
-# language sits in the low-mid range. Matched case-insensitively as substrings.
+# Over-certainty / emphatic-assertion markers ("protesting too much").
+# Session 6 / gap #4: tentative markers were REMOVED from this dimension --
+# every one of them also appeared in _HEDGE_PHRASES, double-counting
+# tentative language across two of the eight equally-weighted dimensions.
+# Tentative language is owned solely by the hedging dimension; this
+# dimension fires on emphatic absolutes only. Matched case-insensitively
+# as substrings.
 _CERTAINTY_MARKERS = (
     "definitely",
     "absolutely",
@@ -126,16 +130,6 @@ _CERTAINTY_MARKERS = (
     "completely",
     "always",
     "never",
-)
-_TENTATIVE_MARKERS = (
-    "maybe",
-    "perhaps",
-    "possibly",
-    "not sure",
-    "i guess",
-    "i think",
-    "sort of",
-    "kind of",
 )
 
 # Points per detected extremity marker, plus a VADER-intensity contribution.
@@ -430,22 +424,20 @@ class PsycholinguisticAnalyzer:
             evidence.append("entity_types=" + ", ".join(labels))
         return PsycholinguisticDimension(score=score, evidence=evidence)
 
-    # ---- P2-S8: certainty/tentative language scorer -----------------------
+    # ---- P2-S8: over-certainty / emphatic assertion scorer -----------------
 
     def _score_certainty(self, doc: Doc, text: str) -> PsycholinguisticDimension:
-        """Score certainty extremity (over-certain OR very tentative).
+        """Score over-certainty / emphatic assertion (dimension 8).
 
-        Counts absolute-certainty and tentative markers and folds in VADER's
-        sentiment intensity (|compound|). Both extremes raise the anomaly
-        score; neutral confident language stays low. ``doc`` is accepted for
-        interface symmetry with the other syntax-based scorers.
+        Counts absolute-certainty markers ("definitely", "i swear", "100%")
+        and folds in VADER's sentiment intensity (|compound|). Tentative
+        language is deliberately NOT counted here -- it is the hedging
+        dimension's signal (gap #4 disjoint; each marker counted once).
+        ``doc`` is accepted for interface symmetry with the other scorers.
         """
         text_lower = text.lower()
         certainty_hits = [m for m in _CERTAINTY_MARKERS if m in text_lower]
-        tentative_hits = [m for m in _TENTATIVE_MARKERS if m in text_lower]
-        marker_count = sum(text_lower.count(m) for m in certainty_hits) + sum(
-            text_lower.count(m) for m in tentative_hits
-        )
+        marker_count = sum(text_lower.count(m) for m in certainty_hits)
 
         compound = self.vader.polarity_scores(text)["compound"]
         intensity = abs(compound)
@@ -456,10 +448,9 @@ class PsycholinguisticAnalyzer:
             + intensity * _CERTAINTY_VADER_WEIGHT,
         )
         evidence = [
-            f"extremity_markers={marker_count}",
+            f"overcertainty_markers={marker_count}",
             f"vader_compound={compound:.3f}",
         ]
-        detected = certainty_hits + tentative_hits
-        if detected:
-            evidence.append("markers=" + ", ".join(sorted(set(detected))))
+        if certainty_hits:
+            evidence.append("markers=" + ", ".join(sorted(set(certainty_hits))))
         return PsycholinguisticDimension(score=score, evidence=evidence)

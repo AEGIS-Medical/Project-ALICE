@@ -221,3 +221,43 @@ def test_analyze_deterministic(analyzer):
     assert a.composite_score == b.composite_score
     for field in _DIMENSION_FIELDS:
         assert getattr(a, field).score == getattr(b, field).score
+
+
+# ---- Session 6 / gap #4: hedging-certainty disjoint ------------------------
+
+
+def test_hedge_and_certainty_lists_are_disjoint():
+    """Regression guard for gap #4: no marker may appear in both lists."""
+    from app.pipelines.psycholinguistic import analyzer as mod
+
+    overlap = set(mod._HEDGE_PHRASES) & set(mod._CERTAINTY_MARKERS)
+    assert not overlap, f"markers scored twice: {sorted(overlap)}"
+
+
+def test_tentative_markers_list_is_gone():
+    """The tentative list was deleted; a revert must be loud."""
+    from app.pipelines.psycholinguistic import analyzer as mod
+
+    assert not hasattr(mod, "_TENTATIVE_MARKERS")
+
+
+def test_tentative_text_no_longer_raises_certainty(analyzer):
+    """Tentative-only text is hedging's job now: certainty stays low while
+    hedging stays high (each signal counted exactly once)."""
+    text = "I think maybe it was sort of possibly like that, I guess."
+    doc = analyzer.nlp(text)
+    certainty = analyzer._score_certainty(doc, text)
+    hedging = analyzer._score_hedging(doc)
+    assert certainty.score <= 35.0, (
+        f"tentative text should barely move over-certainty "
+        f"(got {certainty.score})"
+    )
+    assert hedging.score > 50.0, f"hedging must still fire (got {hedging.score})"
+
+
+def test_emphatic_text_still_maxes_certainty(analyzer):
+    """The over-certainty signal is untouched by the disjoint."""
+    text = "I absolutely definitely swear, 100%, I never ever did it, no doubt."
+    doc = analyzer.nlp(text)
+    certainty = analyzer._score_certainty(doc, text)
+    assert certainty.score >= 60.0, f"emphatic text must score high (got {certainty.score})"

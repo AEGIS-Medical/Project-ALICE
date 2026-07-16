@@ -18,7 +18,9 @@ Analysis Stack"):
     5. disfluency             filler-word frequency
     6. negation               negation arc frequency
     7. detail_specificity     named-entity density
-    8. certainty              over-certain vs. tentative language
+    8. certainty              over-certainty / emphatic assertion (tentative
+                              language is the hedging dimension's signal --
+                              gap #4 disjoint, Session 6)
 
 A score is a *deviation* signal, never a verdict (CLAUDE.md: "ALICE is not a
 lie detector"). The objects are frozen so a score can be shared across the
