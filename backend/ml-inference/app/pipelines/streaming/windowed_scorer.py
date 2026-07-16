@@ -29,7 +29,12 @@ from backend.shared.schemas.score_event import (
 )
 from backend.shared.schemas.transcription import Transcript, TranscriptSegment
 
-from app.pipelines.psycholinguistic.analyzer import PsycholinguisticAnalyzer
+from app.pipelines.psycholinguistic.analyzer import (
+    SUPPORTED_LANGUAGES,
+    PsycholinguisticAnalyzer,
+    UnsupportedLanguageError,
+    _primary_subtag,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +88,25 @@ def stream_scores(
         ``ScoreEvent`` objects with strictly increasing stream times; the
         last event of a non-empty stream is the authoritative FINAL whose
         ``cumulative`` equals the batch analyzer's output field-for-field.
+
+    Raises:
+        UnsupportedLanguageError: ``transcript.language`` is not supported.
+            Because this function is a generator, the raise does not happen
+            at call time -- it surfaces on the caller's first iteration
+            (first ``next()``/first loop step), before any event is yielded.
     """
+    # Gap #8 gate: never let a non-English transcript flow silently through
+    # the English-only analyzer. Raised before any event is emitted, so the
+    # ScoreEvent contract is untouched: an empty stream still means exactly
+    # one thing (zero statements). NOTE: generators defer execution -- this
+    # raise surfaces on the caller's first next()/iteration.
+    if _primary_subtag(transcript.language) not in SUPPORTED_LANGUAGES:
+        raise UnsupportedLanguageError(
+            f"language {transcript.language!r} is not supported by the "
+            f"psycholinguistic vector; supported: "
+            f"{', '.join(sorted(SUPPORTED_LANGUAGES))}"
+        )
+
     cfg = config or StreamScorerConfig()
     segments = sorted(transcript.segments, key=lambda s: s.end_seconds)
     if not segments:

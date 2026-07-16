@@ -13,6 +13,7 @@ from backend.shared.schemas.transcription import Transcript
 
 from .conftest import make_pscore, make_transcript
 
+from app.pipelines.psycholinguistic.analyzer import UnsupportedLanguageError
 from app.pipelines.streaming import stream_scores
 
 
@@ -183,3 +184,43 @@ def test_generator_is_lazy_pull_based():
     # Only the first tick's work happened: cumulative + recent.
     assert len(stub.calls) == 2
     gen.close()
+
+
+# ---- Session 6 / gap #8: language gate at stream entry ---------------------
+
+
+def test_non_english_transcript_raises_on_first_iteration():
+    transcript = make_transcript(
+        [
+            ("Hola, estaba en casa.", 0.0, 2.0),
+            ("Nunca fui alli.", 2.0, 4.0),
+        ],
+        language="es",
+    )
+    gen = stream_scores(transcript)
+    with pytest.raises(UnsupportedLanguageError, match="es"):
+        next(gen)
+
+
+def test_non_english_transcript_emits_zero_events():
+    transcript = make_transcript(
+        [("Hola, estaba en casa.", 0.0, 2.0)], language="es"
+    )
+    events = []
+    with pytest.raises(UnsupportedLanguageError):
+        for ev in stream_scores(transcript):
+            events.append(ev)
+    assert events == []
+
+
+def test_english_regional_variant_streams_normally():
+    transcript = make_transcript(
+        [
+            ("I think I was at home.", 0.0, 2.0),
+            ("I never went there.", 2.0, 4.0),
+        ],
+        language="en-US",
+    )
+    events = list(stream_scores(transcript))
+    assert events, "en-US must stream"
+    assert events[-1].kind.value == "final"

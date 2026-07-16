@@ -45,7 +45,9 @@ def make_pscore(
     )
 
 
-def make_transcript(spec: list[tuple[str, float, float]]) -> Transcript:
+def make_transcript(
+    spec: list[tuple[str, float, float]], language: str = "en"
+) -> Transcript:
     """Build an ordered Transcript from (text, start_seconds, end_seconds)."""
     segments = [
         TranscriptSegment(text=t, start_seconds=s, end_seconds=e)
@@ -54,7 +56,7 @@ def make_transcript(spec: list[tuple[str, float, float]]) -> Transcript:
     duration = max((e for _, _, e in spec), default=0.0)
     return Transcript(
         segments=segments,
-        language="en",
+        language=language,
         audio_duration_seconds=duration,
         model_name="fixture",
         backend="fake",
