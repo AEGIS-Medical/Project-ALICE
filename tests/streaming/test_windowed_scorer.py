@@ -224,3 +224,19 @@ def test_english_regional_variant_streams_normally():
     events = list(stream_scores(transcript))
     assert events, "en-US must stream"
     assert events[-1].kind.value == "final"
+
+
+def test_batch_and_stream_gates_are_symmetric():
+    """Batch analyze(language=...) and stream_scores must refuse the same
+    non-English transcript -- a refactor breaking one gate must fail here."""
+    from app.pipelines.psycholinguistic.analyzer import PsycholinguisticAnalyzer
+
+    transcript = make_transcript(
+        [("Hola, estaba en casa.", 0.0, 2.0)], language="es"
+    )
+    with pytest.raises(UnsupportedLanguageError):
+        next(stream_scores(transcript))
+    with pytest.raises(UnsupportedLanguageError):
+        PsycholinguisticAnalyzer().analyze(
+            transcript.statements(), language=transcript.language
+        )

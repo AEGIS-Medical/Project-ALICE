@@ -158,7 +158,7 @@ def test_vague_text_scores_high(analyzer):
     assert dim.score > 60
 
 
-# ---- P2-S8: certainty/tentative language scorer ---------------------------
+# ---- P2-S8: over-certainty / emphatic assertion scorer --------------------
 
 
 def test_over_certain_scores_high(analyzer):

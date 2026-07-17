@@ -131,7 +131,7 @@ Deception-relevant AUs: AU12−AU6 (fake smile), AU1+AU4 (cognitive load), AU14 
 | VADER v3.3.2 | MIT | Valence-aware sentiment |
 | Custom BERT hedging classifier | Own | Modal verbs + epistemic phrases (NOT regex, 59% FP rate) |
 
-Eight deception-relevant linguistic dimensions: (1) pronoun patterns, (2) hedging frequency, (3) cognitive complexity, (4) emotional word distribution, (5) speech disfluencies, (6) negation frequency, (7) detail specificity, (8) certainty vs. tentative language.
+Eight deception-relevant linguistic dimensions: (1) pronoun patterns, (2) hedging frequency, (3) cognitive complexity, (4) emotional word distribution, (5) speech disfluencies, (6) negation frequency, (7) detail specificity, (8) over-certainty / emphatic assertion (tentative language is measured by the hedging dimension).
 
 ### Vocal Tonality Stack
 
