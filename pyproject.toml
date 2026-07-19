@@ -23,6 +23,10 @@ dependencies = [
     "vaderSentiment>=3.3.2",
     # Landmark telemetry wire format (proto/landmarks.proto).
     "protobuf>=5.26",
+    # Live service async shell (backend/ml-inference/app/service). The api-gateway
+    # session will front this later; localhost-bind dev posture for v1.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
 ]
 
 [project.optional-dependencies]
