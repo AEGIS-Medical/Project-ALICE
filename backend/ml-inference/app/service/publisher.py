@@ -82,13 +82,17 @@ class InProcessPublisher:
     # ---- subscriptions ----------------------------------------------------
     def subscribe(self, last_seq: int = -1) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=self._queue_size)
-        for frame in self._ring:
-            if "seq" in frame and frame["seq"] <= last_seq:
-                continue
-            try:
-                q.put_nowait(frame)
-            except asyncio.QueueFull:
-                break  # catch-up larger than queue: client re-syncs via last_seq
+        backlog = [
+            frame
+            for frame in self._ring
+            if ("seq" in frame and frame["seq"] > last_seq) or "state" in frame
+        ]
+        # If the backlog exceeds queue capacity, deliver only the newest
+        # frames -- the tail always contains the terminal frame when one
+        # exists (it is last in the ring). The client detects the skip from
+        # the first seq it receives, exactly like the predates-window rule.
+        for frame in backlog[-self._queue_size:]:
+            q.put_nowait(frame)
         self._subscribers.append(q)
         return q
 

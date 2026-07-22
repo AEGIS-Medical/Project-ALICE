@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
-import pytest
-
 from app.service.publisher import DROPPED, InProcessPublisher
 from backend.shared.schemas.psycholinguistic import (
     PsycholinguisticDimension,
@@ -92,7 +88,6 @@ def test_slow_subscriber_dropped_with_marker_session_unaffected():
     assert pub.subscriber_count == 1       # only slow removed
     drained = [slow.get_nowait() for _ in range(slow.qsize())]
     assert drained[-1] is DROPPED
-    assert fine.qsize() == 0 or fine.qsize() > 0  # fine still registered
     pub.publish(_event(99.0))
     assert pub.last_seq == 4               # publishing never stalled
 
@@ -103,3 +98,19 @@ def test_unsubscribe_idempotent():
     pub.unsubscribe(q)
     pub.unsubscribe(q)
     assert pub.subscriber_count == 0
+
+
+def test_late_subscriber_with_large_backlog_still_gets_terminal_frame():
+    """Regression: catch-up larger than the queue must never squeeze out the
+    terminal frame -- a reconnecting client would hang forever otherwise."""
+    pub = InProcessPublisher("s1", ring_size=32, queue_size=4)
+    for i in range(10):
+        pub.publish(_event(float(i)))
+    pub.publish_terminal("finished")
+
+    q = pub.subscribe(last_seq=-1)      # backlog (11 frames) > queue_size (4)
+    got = [q.get_nowait() for _ in range(q.qsize())]
+    assert got[-1].get("state") == "finished"          # terminal delivered
+    data_seqs = [f["seq"] for f in got if "seq" in f]
+    assert data_seqs == sorted(data_seqs)               # newest tail, in order
+    assert len(got) <= 4
