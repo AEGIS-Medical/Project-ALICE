@@ -323,6 +323,26 @@ exactly one FINAL, equal to batch; gap #4 (hedging/certainty double-count)
 deliberately deferred until after convergence landed, so the gate's baseline
 stayed stable.
 
+### Session 7 — Live Service Async Shell (complete)
+
+The real-time surface pre-designed in Session 5 (decision #4). Design spec:
+`docs/superpowers/specs/2026-07-19-live-service-async-shell-design.md`.
+
+| Component | Path | Status |
+|---|---|---|
+| Config | `backend/ml-inference/app/service/config.py` | shipped — frozen `LiveServiceConfig` |
+| Sessions + reaper | `app/service/sessions.py` | shipped — detached lifecycle (CREATED/RUNNING/FINISHED/CANCELLED/FAILED), TTL reaper |
+| Publisher (Kafka seam) | `app/service/publisher.py` | shipped — seq, ring buffer, fan-out, slow-client drop (4408); v2 swaps in a bus publisher |
+| Runner | `app/service/runner.py` | shipped — one worker thread/session, sliced-sleep cancellation |
+| REST + WS | `app/service/app.py` | shipped — POST/GET/DELETE /sessions, /healthz, WS /sessions/{id}/events?last_seq= (4404/4408) |
+| Launch + demo | `scripts/run_live_service.py`, `scripts/live_client.py`, `make live` | shipped |
+
+Wire contract: data frames `{session_id, seq, event}`; exactly one terminal
+frame `{session_id, state, reason}`. Auth: none in v1 (localhost bind; JWT is
+the api-gateway session's job). In update to "Known gaps" item 2: the async
+shell is now SHIPPED; remaining for full live: incremental transcription +
+platform media ingest.
+
 ### Known gaps & next-session priorities (review of 2026-07-03)
 
 Ordered by business impact; items 1-2 gate the mobile/live story.
@@ -335,15 +355,17 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    Mbps < 0.5 Mbps on a <1 Mbps EDGE_MINIMAL uplink) and enforced by
    tests/telemetry/test_budget.py. The ~70 KB/min figure now applies to the future
    AU-activation payload.
-2. ~~No real-time path exists~~ **RESOLVED at the contract layer (Session 5):**
-   `ScoreEvent` schema + causal windowed scorer + replayer shipped; batch and
-   stream converge on one contract, enforced by
-   tests/streaming/test_convergence.py (FINAL == batch, field-for-field).
-   Remaining for a true live surface (its own session): async
-   FastAPI/WebSocket shell around the sync generator
-   (`asyncio.to_thread(next, gen)`, per-session cancellation), incremental
-   transcription, and platform media ingest. The windowed events already
-   power the report's scrubbable score timeline directly.
+2. ~~No real-time path exists~~ **RESOLVED (Session 5 contract, Session 7
+   shell):** `ScoreEvent` schema + causal windowed scorer + replayer shipped
+   (Session 5); batch and stream converge on one contract, enforced by
+   tests/streaming/test_convergence.py (FINAL == batch, field-for-field). The
+   async FastAPI/WebSocket shell around the sync generator
+   (`asyncio.to_thread(next, gen)`, per-session cancellation) shipped in
+   Session 7 — `app/service/{config,sessions,publisher,runner,app}.py` +
+   `scripts/run_live_service.py` / `scripts/live_client.py`. Remaining for a
+   true live surface: incremental transcription and platform media ingest.
+   The windowed events already power the report's scrubbable score timeline
+   directly.
 3. **Disfluency dimension will degrade on real transcripts.** Whisper-family models
    suppress filled pauses (um/uh), so the disfluency scorer reads near-zero once real
    WhisperX output replaces the fake backend. Validate on real audio; likely move

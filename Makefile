@@ -3,7 +3,7 @@
 # Requires GNU Make. On Windows install via Chocolatey (`choco install make`)
 # or use Git Bash + WSL. The recipe shells assume POSIX sh syntax.
 
-.PHONY: install test-compress proto
+.PHONY: install test-compress proto live
 
 PYTHON ?= python
 MODE   ?= raw
@@ -33,3 +33,7 @@ test-compress:
 # The generated file is COMMITTED; normal builds never need this.
 proto:
 	$(PYTHON) -m grpc_tools.protoc -Iproto --python_out=backend/shared/proto_gen proto/landmarks.proto
+
+# Run the live service (dev posture: localhost, no auth).
+live:
+	$(PYTHON) scripts/run_live_service.py
