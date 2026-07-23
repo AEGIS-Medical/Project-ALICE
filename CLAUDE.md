@@ -359,13 +359,14 @@ Ordered by business impact; items 1-2 gate the mobile/live story.
    shell):** `ScoreEvent` schema + causal windowed scorer + replayer shipped
    (Session 5); batch and stream converge on one contract, enforced by
    tests/streaming/test_convergence.py (FINAL == batch, field-for-field). The
-   async FastAPI/WebSocket shell around the sync generator
-   (`asyncio.to_thread(next, gen)`, per-session cancellation) shipped in
+   async FastAPI/WebSocket shell around the sync generator shipped in
    Session 7 — `app/service/{config,sessions,publisher,runner,app}.py` +
-   `scripts/run_live_service.py` / `scripts/live_client.py`. Remaining for a
-   true live surface: incremental transcription and platform media ingest.
-   The windowed events already power the report's scrubbable score timeline
-   directly.
+   `scripts/run_live_service.py` / `scripts/live_client.py`. The shell runs
+   each session's sync scoring loop in one worker thread (`asyncio.to_thread`),
+   publishing via `loop.call_soon_threadsafe`, with sliced-sleep cancellation.
+   Remaining for a true live surface: incremental transcription and platform
+   media ingest. The windowed events already power the report's scrubbable score
+   timeline directly.
 3. **Disfluency dimension will degrade on real transcripts.** Whisper-family models
    suppress filled pauses (um/uh), so the disfluency scorer reads near-zero once real
    WhisperX output replaces the fake backend. Validate on real audio; likely move

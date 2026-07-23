@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from urllib.request import Request, urlopen
 
 from websockets.sync.client import connect  # ships with uvicorn[standard]
