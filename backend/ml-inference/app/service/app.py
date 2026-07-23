@@ -9,11 +9,11 @@ import asyncio
 import contextlib
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.service.config import LiveServiceConfig
-from app.service.publisher import InProcessPublisher
+from app.service.publisher import DROPPED, InProcessPublisher
 from app.service.runner import SourceSpec, start_session
 from app.service.sessions import SessionManager
 from backend.shared.schemas.score_event import StreamScorerConfig
@@ -90,5 +90,33 @@ def create_app(config: Optional[LiveServiceConfig] = None) -> FastAPI:
         if publisher is not None and not publisher.terminated:
             publisher.publish_terminal(session.state.value, session.reason)
         return {"session_id": session.id, "state": session.state.value}
+
+    @app.websocket("/sessions/{session_id}/events")
+    async def session_events(
+        websocket: WebSocket, session_id: str, last_seq: int = -1
+    ) -> None:
+        manager: SessionManager = app.state.manager
+        session = manager.get(session_id)
+        if session is None or session.publisher is None:
+            await websocket.accept()
+            await websocket.close(code=4404)
+            return
+        publisher = session.publisher
+        await websocket.accept()
+        queue = publisher.subscribe(last_seq=last_seq)
+        try:
+            while True:
+                frame = await queue.get()
+                if frame is DROPPED:
+                    await websocket.close(code=4408)
+                    return
+                await websocket.send_json(frame)
+                if "state" in frame:        # terminal frame: normal close
+                    await websocket.close()
+                    return
+        except WebSocketDisconnect:
+            pass                             # detached: session untouched
+        finally:
+            publisher.unsubscribe(queue)
 
     return app
