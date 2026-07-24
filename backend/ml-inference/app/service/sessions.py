@@ -46,6 +46,7 @@ class Session:
         self.stream_time_seconds: float = 0.0
         self.statement_count: int = 0
         self.language: Optional[str] = None
+        self.runner_task: Optional[object] = None  # asyncio.Task (held for GC lifetime)
 
     @property
     def subscriber_count(self) -> int:
@@ -78,7 +79,10 @@ class Session:
 
 class SessionManager:
     """Registry + lifecycle transitions + reaper. Event-loop-thread only
-    (mutations arrive via call_soon_threadsafe from workers)."""
+    (mutations arrive via call_soon_threadsafe from workers) (exception: the
+    runner updates the progress scalars language/statement_count/
+    stream_time_seconds from its worker thread -- GIL-safe atomic writes;
+    session STATE is only ever mutated on the loop thread)."""
 
     def __init__(self, config: LiveServiceConfig) -> None:
         self._config = config
@@ -104,10 +108,10 @@ class SessionManager:
         self, session: Session, state: SessionState, reason: Optional[str] = None
     ) -> None:
         """First terminal writer wins; later calls are no-ops."""
-        if session.state in TERMINAL_STATES:
-            return
         if state not in TERMINAL_STATES:
             raise ValueError(f"{state} is not terminal")
+        if session.state in TERMINAL_STATES:
+            return
         session.state = state
         session.reason = reason
         session.terminal_at = time.time()

@@ -5,6 +5,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class LiveServiceConfig(BaseModel):
+    """Live-service configuration.
+
+    v1 runs each live/paced session in a shared-default-executor thread for
+    the session's lifetime, so concurrent sessions are bounded by the default
+    ThreadPoolExecutor (~min(32, cpu+4)); the v2 bus/worker split lifts this.
+    """
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     host: str = Field(default="127.0.0.1", description="Bind host (localhost = v1 auth posture).")

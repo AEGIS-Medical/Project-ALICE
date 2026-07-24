@@ -317,8 +317,9 @@ Closes gap #2 at the contract layer (scope A: no live infra). Design spec:
 
 Key decisions (locked in the spec — do not re-litigate): sync generator core
 with the async FastAPI/WebSocket shell as a documented future session
-(decision #4: per-tick work is CPU-bound; the shell drives the generator via
-`asyncio.to_thread(next, gen)`); each interim carries cumulative + recent;
+(decision #4: per-tick work is CPU-bound; the shell drives the generator from
+a worker thread (`asyncio.to_thread` runs the whole session loop; per-tick
+work is CPU-bound)); each interim carries cumulative + recent;
 exactly one FINAL, equal to batch; gap #4 (hedging/certainty double-count)
 deliberately deferred until after convergence landed, so the gate's baseline
 stayed stable.

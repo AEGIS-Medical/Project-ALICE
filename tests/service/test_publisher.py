@@ -92,6 +92,17 @@ def test_slow_subscriber_dropped_with_marker_session_unaffected():
     assert pub.last_seq == 4               # publishing never stalled
 
 
+def test_publish_after_terminal_is_ignored():
+    """Terminal-is-always-last ring invariant: a late data frame from an
+    in-flight worker callback (DELETE race) must not append past the terminal."""
+    pub = InProcessPublisher("s1", ring_size=16, queue_size=8)
+    pub.publish(_event(1.0))
+    pub.publish_terminal("cancelled")
+    pub.publish(_event(2.0))               # late frame from the racing worker
+    assert pub.buffered[-1].get("state") == "cancelled"   # terminal still last
+    assert pub.last_seq == 0               # seq did not advance past the terminal
+
+
 def test_unsubscribe_idempotent():
     pub = InProcessPublisher("s1", ring_size=4, queue_size=4)
     q = pub.subscribe()

@@ -129,4 +129,6 @@ async def start_session(
         if publisher is not None and not publisher.terminated:
             publisher.publish_terminal(session.state.value, session.reason)
 
-    return asyncio.get_running_loop().create_task(_run_and_finalize())
+    task = asyncio.get_running_loop().create_task(_run_and_finalize())
+    session.runner_task = task
+    return task

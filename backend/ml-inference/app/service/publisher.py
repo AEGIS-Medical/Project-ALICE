@@ -49,6 +49,8 @@ class InProcessPublisher:
 
     # ---- publishing -------------------------------------------------------
     def publish(self, event: ScoreEvent) -> None:
+        if self.terminated:
+            return
         frame = {
             "session_id": self._session_id,
             "seq": self._next_seq,
